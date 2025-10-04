@@ -119,7 +119,7 @@ class SyncthingNode:
         # opts["connectionPriorityRelay"] = "50"
         # opts["connectionPriorityUpgradeThreshold"] = "0"
 
-        self.write_config()
+        self.update_config()
 
         self.name = name
         self.role = role
@@ -132,10 +132,20 @@ class SyncthingNode:
         self.discovery_port: int
         self.folder: str
 
-    def write_config(self):
-        # stop nodes to be able to write configs
-        self.stop()
+    def update_config(self):
+        was_running = self.running
+        if was_running:
+            # stop nodes to be able to write configs
+            self.stop()
+
         self.config.save()
+
+        if was_running:
+            self.start()
+
+    @property
+    def running(self):
+        return getattr(self, "process", None) and self.process.poll() is None
 
     @property
     def api_key(self):
@@ -158,7 +168,7 @@ class SyncthingNode:
 
         self.config["gui"]["address"] = f"127.0.0.1:{self.gui_port}"
         # self.config["options"]["listenAddress"] = f"tcp://0.0.0.0:{self.sync_port}"
-        self.write_config()
+        self.update_config()
 
         self.process = subprocess.Popen(
             [self.bin, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"],
@@ -349,7 +359,7 @@ class SyncthingCluster:
                 folder_device = folder.append("device", attrib={"id": peer_id, "introducedBy": ""})
                 folder_device["encryptionPassword"] = ""
 
-            st.write_config()
+            st.update_config()
 
     def wait_for_connection(self, timeout=60):
         return [st.wait_for_connection(timeout=timeout) for st in self.nodes]

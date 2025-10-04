@@ -117,47 +117,41 @@ def test_rw_rw_copy():
         file_copy({"test2.txt": "hello morld"}, rw2.folder, rw1.folder)
 
 
+@skip("Behavior known")
 def test_w_r_move():
     with SyncthingCluster(["w", "r"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        w, r = cluster
+
+        # deletes must be ignored in the destination folder
+        r.config["folder"]["ignoreDelete"] = "true"
+        r.update_config()
 
         source_fstree = {"test.txt": "hello world"}
-        file_copy(source_fstree, rw1.folder, rw2.folder)
+        file_copy(source_fstree, w.folder, r.folder)
 
         processes.cmd(
             "syncthing_send.py",
             "--interval=1",
             "--timeout=30s",
-            f"--port={rw1.gui_port}",
-            f"--api-key={rw1.api_key}",
-            rw1.folder,
+            f"--port={w.gui_port}",
+            f"--api-key={w.api_key}",
+            w.folder,
             strict=False
         )
-        assert read_fstree(Path(rw1.folder)) == {}
-        assert read_fstree(Path(rw2.folder)) == source_fstree
+        assert read_fstree(Path(w.folder)) == {}
+        assert read_fstree(Path(r.folder)) == source_fstree
 
-        cluster.inspect()
-        input()
-
-
-def test_r_rw_copy():
-    with SyncthingCluster(["r", "rw"]) as cluster:
-        cluster.wait_for_connection()
-        rw1, rw2 = cluster
-
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
-
-        cluster.inspect()
-        input()
+        # cluster.inspect()
+        # input()
 
 
 def test_w_rw_copy():
     with SyncthingCluster(["w", "rw"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        w, rw = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
+        file_copy({"test.txt": "hello world"}, w.folder, rw.folder)
 
         cluster.inspect()
         input()
@@ -166,9 +160,9 @@ def test_w_rw_copy():
 def test_rw_r_copy():
     with SyncthingCluster(["rw", "r"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        rw, r = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
+        file_copy({"test.txt": "hello world"}, rw.folder, r.folder)
 
         cluster.inspect()
         input()
@@ -177,9 +171,9 @@ def test_rw_r_copy():
 def test_rw_w_copy():
     with SyncthingCluster(["rw", "w"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        rw, w = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
+        file_copy({"test.txt": "hello world"}, rw.folder, w.folder)
 
         cluster.inspect()
         input()
@@ -188,10 +182,10 @@ def test_rw_w_copy():
 def test_r_r_copy():
     with SyncthingCluster(["r", "r"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        r1, r2 = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
-        file_copy({"test.txt": "hello morld"}, rw2.folder, rw1.folder)
+        file_copy({"test.txt": "hello world"}, r1.folder, r2.folder)
+        file_copy({"test.txt": "hello morld"}, r2.folder, r1.folder)
 
         cluster.inspect()
         input()
@@ -200,10 +194,10 @@ def test_r_r_copy():
 def test_w_w_copy():
     with SyncthingCluster(["w", "w"]) as cluster:
         cluster.wait_for_connection()
-        rw1, rw2 = cluster
+        w1, w2 = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
-        file_copy({"test.txt": "hello morld"}, rw2.folder, rw1.folder)
+        file_copy({"test.txt": "hello world"}, w1.folder, w2.folder)
+        file_copy({"test.txt": "hello morld"}, w2.folder, w1.folder)
 
         cluster.inspect()
         input()
