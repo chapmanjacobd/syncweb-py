@@ -1,0 +1,123 @@
+[project]
+dependencies = []
+description = ""
+dynamic = ["version"]
+license = {file = "LICENSE"}
+name = "syncweb-py"
+readme = ".github/README.md"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = ["black", "isort", "ssort"]
+test = ["ruff", "pytest", "pytest-regressions", "pyfakefs"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310", "py311", "py312"]
+
+[tool.isort]
+atomic = true
+combine_straight_imports = true
+float_to_top = true
+group_by_package = true
+line_length = 120
+profile = "black"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["ANN201", "PLR2004"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+unfixable = ["F841"]
+ignore = [
+  "ANN001",
+  "ANN002",
+  "ANN003",
+  "ANN2",
+  "ANN201",
+  "ANN204",
+  "ANN401",
+  "B905",
+  "BLE001",
+  "C400",
+  "C401",
+  "C405",
+  "C901",
+  "COM812",
+  "D1",
+  "D2",
+  "E401",
+  "E501",
+  "E713",
+  "E741",
+  "EM101",
+  "ERA001",
+  "F401",
+  "FBT002",
+  "I001",
+  "ICN001",
+  "N806",
+  "PD901",
+  "PGH003",
+  "PGH004",
+  "PLR0913",
+  "PLW0603",
+  "PLW2901",
+  "PT001",
+  "PT011",
+  "S607",
+  "PTH1",
+  "PTH1",
+  "PTH2",
+  "Q000",
+  "RET504",
+  "RET505",
+  "RET506",
+  "RET507",
+  "RUF001",
+  "RUF100",
+  "S101",
+  "S108",
+  "S306",
+  "S311",
+  "S324",
+  "S603",
+  "S606",
+  "SIM103",
+  "SIM105",
+  "SIM108",
+  "SIM110",
+  "SIM114",
+  "SIM118",
+  "T100",
+  "T201",
+  "TD002",
+  "TD003",
+  "TD004",
+  "TRY003",
+  "TRY300",
+  "TRY301",
+  "UP015",
+  "UP017",
+  "UP031",
+  "UP038",
+]
+select = ["ALL"]
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.pytest.ini_options]
+addopts = "--pdbcls=IPython.terminal.debugger:TerminalPdb --ignore=tests/data --capture=tee-sys --capture=no --log-cli-level=ERROR"
+testpaths = ["tests"]
+
+[tool.pyright]
+exclude = [
+  "**/__pycache__",
+  ".*cache",
+  "__pypackages__",
+  ".git",
+]
+reportMissingImports = true
