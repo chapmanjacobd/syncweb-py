@@ -6,21 +6,21 @@ from syncthing import SyncthingCluster
 from library.utils import processes
 
 
-def write_fstree(base: Path, fstree: dict):
+def write_fstree(fstree: dict, base: Path | str):
     for name, value in fstree.items():
-        path = base / name
+        path = Path(base) / name
         if isinstance(value, dict):
             path.mkdir(parents=True, exist_ok=True)
-            write_fstree(path, value)
+            write_fstree(value, path)
         else:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w") as f:
                 f.write(value)
 
 
-def read_fstree(base: Path) -> dict:
+def read_fstree(base: Path | str) -> dict:
     tree = {}
-    for child in base.iterdir():
+    for child in Path(base).iterdir():
         if child.name == ".stfolder":
             continue
         elif child.is_dir():
@@ -31,24 +31,24 @@ def read_fstree(base: Path) -> dict:
     return tree
 
 
-def wait_for_fstree(folder: Path, fstree: dict, timeout=30) -> bool:
+def all_files_exist(tree: dict, base: Path| str) -> bool:
+    for name, value in tree.items():
+        path = Path(base) / name
+        if isinstance(value, dict):
+            if not path.is_dir():
+                return False
+            if not all_files_exist(value, path):
+                return False
+        else:
+            if not path.is_file():
+                return False
+    return True
+
+def wait_for_fstree(fstree: dict, folder: Path | str, timeout=30) -> bool:
     deadline = time.time() + timeout
 
-    def all_files_exist(base: Path, tree: dict) -> bool:
-        for name, value in tree.items():
-            path = base / name
-            if isinstance(value, dict):
-                if not path.is_dir():
-                    return False
-                if not all_files_exist(path, value):
-                    return False
-            else:
-                if not path.is_file():
-                    return False
-        return True
-
     while time.time() < deadline:
-        if all_files_exist(folder, fstree):
+        if all_files_exist(fstree, folder):
             return True
         time.sleep(1)
     return False
@@ -81,21 +81,10 @@ def validate_fstree(expected: dict, actual: dict, prefix=""):
     return ok
 
 
-def file_copy(fstree, folder1, folder2):
-    folder1 = Path(folder1)
-    folder2 = Path(folder2)
-
-    # Ensure nothing from fstree already exists in folder1/folder2
-    if validate_fstree(fstree, read_fstree(folder1)):
-        raise AssertionError("folder1 already contains target files")
-    if validate_fstree(fstree, read_fstree(folder2)):
-        raise AssertionError("folder2 already contains target files")
-
-    write_fstree(folder1, fstree)
-
-    # Wait for fstree to exist in folder2
-    if wait_for_fstree(folder2, fstree, timeout=60):
-        tree2 = read_fstree(folder2)
+def check_fstree(fstree, folder):
+    # Wait for fstree to exist in folder
+    if wait_for_fstree(folder, fstree, timeout=60):
+        tree2 = read_fstree(folder)
         if validate_fstree(fstree, tree2):
             print("Files synced successfully")
             return True
@@ -113,8 +102,11 @@ def test_rw_rw_copy():
         cluster.wait_for_connection()
         rw1, rw2 = cluster
 
-        file_copy({"test.txt": "hello world"}, rw1.folder, rw2.folder)
-        file_copy({"test2.txt": "hello morld"}, rw2.folder, rw1.folder)
+        write_fstree({"test.txt": "hello world"}, rw1.folder)
+        check_fstree({"test.txt": "hello world"}, rw2.folder)
+
+        write_fstree({"test2.txt": "hello morld"}, rw2.folder)
+        check_fstree({"test2.txt": "hello morld"}, rw1.folder)
 
 
 @skip("Behavior known")
@@ -128,7 +120,8 @@ def test_w_r_move():
         r.update_config()
 
         source_fstree = {"test.txt": "hello world"}
-        file_copy(source_fstree, w.folder, r.folder)
+        write_fstree(source_fstree, w.folder)
+        check_fstree(source_fstree, r.folder)
 
         processes.cmd(
             "syncthing_send.py",
@@ -143,18 +136,32 @@ def test_w_r_move():
         assert read_fstree(Path(r.folder)) == source_fstree
 
         # cluster.inspect()
-        # input()
+        # input("Continue?")
 
 
-def test_w_rw_copy():
-    with SyncthingCluster(["w", "rw"]) as cluster:
+def test_w_w_r_copy():
+    with SyncthingCluster(["w", "w", "r"]) as cluster:
         cluster.wait_for_connection()
-        w, rw = cluster
+        w1, w2, r = cluster
 
-        file_copy({"test.txt": "hello world"}, w.folder, rw.folder)
+        write_fstree({"test.txt": "node0"}, w1.folder)
+        write_fstree({"test.txt": "node1"}, w2.folder)
+        # write_fstree({"test.txt": "node2"}, r.folder)
 
         cluster.inspect()
-        input()
+        input("Continue?")
+
+def test_w_w_rw_copy():
+    with SyncthingCluster(["w", "w", "rw"]) as cluster:
+        cluster.wait_for_connection()
+        w1, w2, rw = cluster
+
+        write_fstree({"test.txt": "node0"}, w1.folder)
+        write_fstree({"test.txt": "node1"}, w2.folder)
+        write_fstree({"test.txt": "node2"}, rw.folder)
+
+        cluster.inspect()
+        input("Continue?")
 
 
 def test_rw_r_copy():
@@ -162,10 +169,10 @@ def test_rw_r_copy():
         cluster.wait_for_connection()
         rw, r = cluster
 
-        file_copy({"test.txt": "hello world"}, rw.folder, r.folder)
+        write_fstree({"test.txt": "hello world"}, rw.folder)
 
         cluster.inspect()
-        input()
+        input("Continue?")
 
 
 def test_rw_w_copy():
@@ -173,10 +180,10 @@ def test_rw_w_copy():
         cluster.wait_for_connection()
         rw, w = cluster
 
-        file_copy({"test.txt": "hello world"}, rw.folder, w.folder)
+        write_fstree({"test.txt": "hello world"}, rw.folder)
 
         cluster.inspect()
-        input()
+        input("Continue?")
 
 
 def test_r_r_copy():
@@ -184,11 +191,11 @@ def test_r_r_copy():
         cluster.wait_for_connection()
         r1, r2 = cluster
 
-        file_copy({"test.txt": "hello world"}, r1.folder, r2.folder)
-        file_copy({"test.txt": "hello morld"}, r2.folder, r1.folder)
+        write_fstree({"test.txt": "hello world"}, r1.folder)
+        write_fstree({"test.txt": "hello morld"}, r2.folder)
 
         cluster.inspect()
-        input()
+        input("Continue?")
 
 
 def test_w_w_copy():
@@ -196,8 +203,8 @@ def test_w_w_copy():
         cluster.wait_for_connection()
         w1, w2 = cluster
 
-        file_copy({"test.txt": "hello world"}, w1.folder, w2.folder)
-        file_copy({"test.txt": "hello morld"}, w2.folder, w1.folder)
+        write_fstree({"test.txt": "hello world"}, w1.folder)
+        write_fstree({"test.txt": "hello morld"}, w2.folder)
 
         cluster.inspect()
-        input()
+        input("Continue?")
