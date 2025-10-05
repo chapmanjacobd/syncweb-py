@@ -132,9 +132,9 @@ if __name__ == "__main__":
     gui = config["gui"]
     print("GUI address:", gui["address"])
     gui["address"] = "127.0.0.1:9999"
-    minDiskFree = config['options'].append("minDiskFree")
+    minDiskFree = config["options"].append("minDiskFree")
     minDiskFree["@unit"] = "%"
     minDiskFree.text = "1"
-    print(config['options']["minDiskFree"])
+    print(config["options"]["minDiskFree"])
 
     config.save("config_modified.xml")

@@ -2,8 +2,9 @@ import time
 from pathlib import Path
 from unittest import skip
 
-from syncthing import SyncthingCluster
 from library.utils import processes
+
+from syncthing import SyncthingCluster, SyncthingNode
 
 
 def write_fstree(fstree: dict, base: Path | str):
@@ -31,7 +32,7 @@ def read_fstree(base: Path | str) -> dict:
     return tree
 
 
-def all_files_exist(tree: dict, base: Path| str) -> bool:
+def all_files_exist(tree: dict, base: Path | str) -> bool:
     for name, value in tree.items():
         path = Path(base) / name
         if isinstance(value, dict):
@@ -43,6 +44,7 @@ def all_files_exist(tree: dict, base: Path| str) -> bool:
             if not path.is_file():
                 return False
     return True
+
 
 def wait_for_fstree(fstree: dict, folder: Path | str, timeout=30) -> bool:
     deadline = time.time() + timeout
@@ -130,13 +132,26 @@ def test_w_r_move():
             f"--port={w.gui_port}",
             f"--api-key={w.api_key}",
             w.folder,
-            strict=False
+            strict=False,
         )
         assert read_fstree(Path(w.folder)) == {}
         assert read_fstree(Path(r.folder)) == source_fstree
 
         # cluster.inspect()
         # input("Continue?")
+
+
+def test_events():
+    with SyncthingNode("node0") as node0, SyncthingNode("node1") as node1:
+        node0.start()
+        for event in node0.event_source():
+            print(event)
+
+        node1.start()
+
+        evt = node0.wait_for_event("FolderSummary", timeout=15)
+        if evt:
+            print("Got FolderSummary:", evt)
 
 
 def test_w_w_r_copy():
@@ -150,6 +165,7 @@ def test_w_w_r_copy():
 
         cluster.inspect()
         input("Continue?")
+
 
 def test_w_w_rw_copy():
     with SyncthingCluster(["w", "w", "rw"]) as cluster:
