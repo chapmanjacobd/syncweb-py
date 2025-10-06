@@ -1,8 +1,8 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
-from library.utils import processes
 import pytest
+from library.utils import processes
 
 import db, fstree
 from syncthing import SyncthingCluster
@@ -116,3 +116,16 @@ def test_w_r_r_blocks_across_folders():
     for st in cluster.nodes:
         st.cleanup()
     shutil.rmtree(cluster.tmpdir, ignore_errors=True)
+
+
+def test_fake():
+    cluster = SyncthingCluster(["rw", "rw"])
+    cluster.setup_peers()
+    cluster.folder_id = cluster.setup_folder(prefix="fake/?files=50&maxsize=100&seed=?&latency=50ms")
+    for st in cluster.nodes:
+        st.start()
+    # cluster.wait_for_connection()
+    rw1, rw2 = cluster
+
+    cluster.inspect()
+    breakpoint()

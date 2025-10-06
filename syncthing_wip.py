@@ -1,24 +1,9 @@
 from library.utils import processes
-import pytest
 
 import fstree
 from syncthing import SyncthingCluster, SyncthingNode
 
 processes.cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
-
-
-
-def test_fake():
-    cluster = SyncthingCluster(["rw", "rw"])
-    cluster.setup_peers()
-    cluster.folder_id = cluster.setup_folder(prefix=f"fake?size={5 * 1000}")
-    for st in cluster.nodes:
-        st.start()
-    cluster.wait_for_connection()
-    rw1, rw2 = cluster
-
-    cluster.inspect()
-    breakpoint()
 
 
 def test_globalignore():

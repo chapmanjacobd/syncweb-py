@@ -359,6 +359,99 @@ class SyncthingNode:
     def cleanup(self):
         self.stop()
 
+    def add_devices(self, peer_ids):
+        for j, peer_id in enumerate(peer_ids):
+            device = self.config.append(
+                "device",
+                attrib={
+                    "id": peer_id,
+                    "name": f"node{j}",
+                    "compression": "metadata",
+                    "introducer": "false",
+                    "skipIntroductionRemovals": "false",
+                    "introducedBy": "",
+                },
+            )
+            device["address"] = "dynamic"
+            # device["address"] = "http://localhost:22000"
+            device["paused"] = "false"
+            device["autoAcceptFolders"] = "false"
+            device["maxSendKbps"] = "0"
+            device["maxRecvKbps"] = "0"
+            device["maxRequestKiB"] = "0"
+            device["untrusted"] = "false"
+            device["remoteGUIPort"] = "0"
+            device["numConnections"] = "0"
+
+    def add_folder(self, folder_id, folder_label, prefix, peer_ids):
+        is_fakefs = prefix and prefix.startswith("fake")
+
+        if is_fakefs and prefix:
+            self.local = Path(prefix)
+        elif prefix:
+            self.local = Path(prefix) / self.name
+        else:
+            self.local = self.home_path / self.name
+
+        if not is_fakefs:
+            (self.local / folder_id).mkdir(parents=True, exist_ok=True)
+
+        folder = self.config.append(
+            "folder",
+            attrib={
+                "id": folder_id,
+                "label": folder_label,
+                "path": prefix if is_fakefs else str(self.local / folder_id),
+                "type": ROLE_TO_TYPE.get(self.role, self.role),
+                "rescanIntervalS": "3600",
+                "fsWatcherEnabled": "false" if is_fakefs else "true",
+                "fsWatcherDelayS": "10",
+                "fsWatcherTimeoutS": "0",
+                "ignorePerms": "false",
+                "autoNormalize": "true",
+            },
+        )
+        folder["filesystemType"] = "fake" if is_fakefs else "basic"
+        folder["minDiskFree"] = {"@unit": "%", "#text": "1"}
+        versioning = folder.append("versioning")
+        versioning["cleanupIntervalS"] = "3600"
+        versioning["fsPath"] = ""
+        versioning["fsType"] = "fake" if is_fakefs else "basic"
+        folder["copiers"] = "0"
+        folder["pullerMaxPendingKiB"] = "0"
+        folder["hashers"] = "0"
+        folder["order"] = "random"
+        folder["ignoreDelete"] = "false"
+        folder["scanProgressIntervalS"] = "0"
+        folder["pullerPauseS"] = "0"
+        folder["pullerDelayS"] = "1"
+        folder["maxConflicts"] = "10"
+        folder["disableSparseFiles"] = "false"
+        folder["paused"] = "false"
+        folder["markerName"] = ".stfolder"
+        folder["copyOwnershipFromParent"] = "false"
+        folder["modTimeWindowS"] = "0"
+        folder["maxConcurrentWrites"] = "16"
+        folder["disableFsync"] = "false"
+        folder["blockPullOrder"] = "standard"
+        folder["copyRangeMethod"] = "standard"
+        folder["caseSensitiveFS"] = "false"
+        folder["junctionsAsDirs"] = "false"
+        folder["syncOwnership"] = "false"
+        folder["sendOwnership"] = "false"
+        folder["syncXattrs"] = "false"
+        folder["sendXattrs"] = "false"
+        xattrFilter = folder.append("xattrFilter")
+        xattrFilter["maxSingleEntrySize"] = "1024"
+        xattrFilter["maxTotalSize"] = "4096"
+
+        # add devices to folder
+        for peer_id in peer_ids:
+            folder_device = folder.append("device", attrib={"id": peer_id, "introducedBy": ""})
+            folder_device["encryptionPassword"] = ""
+
+        self.update_config()
+
     def wait_for_connection(self, timeout=60):
         deadline = time.time() + timeout
 
@@ -698,7 +791,7 @@ class SyncthingNode:
         return False
 
     def ignore_all_files(self, folder_id: str, exceptions: list[str] | None = None):
-        if str(self.local).startswith("fake?"):
+        if str(self.local).startswith("fake://"):
             raise ValueError("self.folder is None; cannot construct .stignore path.")
 
         stignore_path = self.local / folder_id / ".stignore"
@@ -852,11 +945,11 @@ class SyncthingNode:
                 for f in filenames:
                     fpath = Path(dirpath) / f
                     try:
-                        st = fpath.stat()
+                        stat = fpath.stat()
                     except FileNotFoundError:
                         continue
-                    total_size += st.st_size
-                    last_mod = max(last_mod, st.st_mtime)
+                    total_size += stat.st_size
+                    last_mod = max(last_mod, stat.st_mtime)
 
                 if total_size == 0 and not filenames:
                     continue  # skip empty dirs
@@ -1073,7 +1166,7 @@ class SyncthingNode:
             self.set_folder_type(folder_id, old_type)
 
     def list_local_ignored_files(self, folder_id: str):
-        if str(self.local).startswith("fake?"):
+        if str(self.local).startswith("fake://"):
             raise ValueError("self.folder is None; cannot read fake stfolder.")
 
         folder_path = self.local / folder_id
@@ -1097,7 +1190,7 @@ class SyncthingNode:
         return {"folder": folder_id, "ignored": sorted(ignored_files)}
 
     def list_global_ignored_files(self, folder_id: str):
-        if str(self.local).startswith("fake?"):
+        if str(self.local).startswith("fake://"):
             raise ValueError("self.folder is None; cannot read fake stfolder.")
 
         folder_path = self.local / folder_id
@@ -1155,28 +1248,7 @@ class SyncthingCluster:
 
     def setup_peers(self):
         for st in self.nodes:
-            for j, peer_id in enumerate(self.device_ids):
-                device = st.config.append(
-                    "device",
-                    attrib={
-                        "id": peer_id,
-                        "name": f"node{j}",
-                        "compression": "metadata",
-                        "introducer": "false",
-                        "skipIntroductionRemovals": "false",
-                        "introducedBy": "",
-                    },
-                )
-                device["address"] = "dynamic"
-                # device["address"] = "http://localhost:22000"
-                device["paused"] = "false"
-                device["autoAcceptFolders"] = "false"
-                device["maxSendKbps"] = "0"
-                device["maxRecvKbps"] = "0"
-                device["maxRequestKiB"] = "0"
-                device["untrusted"] = "false"
-                device["remoteGUIPort"] = "0"
-                device["numConnections"] = "0"
+            st.add_devices(self.device_ids)
 
     def setup_folder(self, folder_id: str | None = None, folder_label: str | None = None, prefix: str | None = None):
         if folder_id is None:
@@ -1184,73 +1256,15 @@ class SyncthingCluster:
         if folder_label is None:
             folder_label = "SharedFolder"
 
-        for st in self.nodes:
-            if prefix is None:
-                st.local = self.tmpdir / st.name
-            elif prefix.startswith("fake?"):
-                st.local = Path(prefix)
-            else:
-                st.local = Path(prefix) / st.name
-
-            if st.local:
-                (st.local / folder_id).mkdir(parents=True, exist_ok=True)
-
-            folder = st.config.append(
-                "folder",
-                attrib={
-                    "id": folder_id,
-                    "label": folder_label,
-                    "path": prefix if prefix and prefix.startswith("fake?") else str(st.local / folder_id),
-                    "type": ROLE_TO_TYPE.get(st.role, st.role),
-                    "rescanIntervalS": "3600",
-                    "fsWatcherEnabled": "true",
-                    "fsWatcherDelayS": "10",
-                    "fsWatcherTimeoutS": "0",
-                    "ignorePerms": "false",
-                    "autoNormalize": "true",
-                },
-            )
-            folder["filesystemType"] = "fake" if prefix and prefix.startswith("fake?") else "basic"
-            folder["minDiskFree"] = {"@unit": "%", "#text": "1"}
-            versioning = folder.append("versioning")
-            versioning["cleanupIntervalS"] = "3600"
-            versioning["fsPath"] = ""
-            versioning["fsType"] =  "fake" if prefix and prefix.startswith("fake?") else "basic"
-            folder["copiers"] = "0"
-            folder["pullerMaxPendingKiB"] = "0"
-            folder["hashers"] = "0"
-            folder["order"] = "random"
-            folder["ignoreDelete"] = "false"
-            folder["scanProgressIntervalS"] = "0"
-            folder["pullerPauseS"] = "0"
-            folder["pullerDelayS"] = "1"
-            folder["maxConflicts"] = "10"
-            folder["disableSparseFiles"] = "false"
-            folder["paused"] = "false"
-            folder["markerName"] = ".stfolder"
-            folder["copyOwnershipFromParent"] = "false"
-            folder["modTimeWindowS"] = "0"
-            folder["maxConcurrentWrites"] = "16"
-            folder["disableFsync"] = "false"
-            folder["blockPullOrder"] = "standard"
-            folder["copyRangeMethod"] = "standard"
-            folder["caseSensitiveFS"] = "false"
-            folder["junctionsAsDirs"] = "false"
-            folder["syncOwnership"] = "false"
-            folder["sendOwnership"] = "false"
-            folder["syncXattrs"] = "false"
-            folder["sendXattrs"] = "false"
-            xattrFilter = folder.append("xattrFilter")
-            xattrFilter["maxSingleEntrySize"] = "1024"
-            xattrFilter["maxTotalSize"] = "4096"
-
-            # add devices to folder
-            for peer_id in self.device_ids:
-                folder_device = folder.append("device", attrib={"id": peer_id, "introducedBy": ""})
-                folder_device["encryptionPassword"] = ""
-
-            st.update_config()
+        for idx, st in enumerate(self.nodes):
+            st.add_folder(folder_id, folder_label, self.increment_seed(prefix, idx), self.device_ids)
         return folder_id
+
+    @staticmethod
+    def increment_seed(prefix, idx):
+        if prefix and "seed=?" in prefix:
+            return prefix.replace("seed=?", f"seed={idx}")
+        return prefix
 
     def wait_for_connection(self, timeout=60):
         return [st.wait_for_connection(timeout=timeout) for st in self.nodes]
