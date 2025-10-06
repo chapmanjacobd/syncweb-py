@@ -283,8 +283,7 @@ class SyncthingNode:
         self.gui_port: int
         self.sync_port: int
         self.discovery_port: int
-        self.folder: str
-        self.folder_id: str
+        self.local: Path
 
     def update_config(self):
         was_running = self.running
@@ -666,10 +665,15 @@ class SyncthingNode:
     def db_ignores(self, folder_id: str):
         return self._get("db/ignores", params={"folder": folder_id})
 
-    def db_set_ignores(self, folder_id: str, ignore_lines: list[str]):
-        payload = {"ignore": ignore_lines}
-        params = {"folder": folder_id}
-        return self._post("db/ignores", json=payload, params=params)
+    def db_set_ignores(self, folder_id: str, ignore_lines: list[str] | None = None):
+        if ignore_lines is None:
+            ignore_lines = ["*"]
+        return self._post("db/ignores", params={"folder": folder_id}, json={"ignore": ignore_lines})
+
+    def db_set_default_ignore(self, folder_id: str, ignore_lines: list[str] | None = None):
+        if ignore_lines is None:
+            ignore_lines = ["*"]
+        return self._put("config/defaults/ignores", params={"folder": folder_id}, json={"ignore": ignore_lines})
 
     def _read_stignore(self, folder_path: Path) -> list[str]:
         ignore_file = folder_path / ".stignore"
@@ -693,11 +697,11 @@ class SyncthingNode:
                 return True
         return False
 
-    def ignore_all_files(self, folder_root: str | None = None, exceptions: list[str] | None = None):
-        if folder_root is None:
-            folder_root = self.folder
+    def ignore_all_files(self, folder_id: str, exceptions: list[str] | None = None):
+        if str(self.local).startswith("fake?"):
+            raise ValueError("self.folder is None; cannot construct .stignore path.")
 
-        stignore_path = Path(self.folder) / ".stignore"
+        stignore_path = self.local / folder_id / ".stignore"
         stignore_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Read existing lines, strip comments and blanks
@@ -803,7 +807,13 @@ class SyncthingNode:
 
     def db_file(self, folder_id: str, relative_path: str):
         params = {"folder": folder_id, "file": urllib.parse.quote(relative_path, safe="")}
-        return self._get("db/file", params=params)
+
+        resp = self.session.get(f"{self.api_url}/rest/db/file", params=params)
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s", relative_path)
+        else:
+            resp.raise_for_status()
+        return resp
 
     def db_browse(self, folder_id: str, levels: int | None = None, prefix: str | None = None):
         params = {"folder": folder_id}
@@ -1063,7 +1073,10 @@ class SyncthingNode:
             self.set_folder_type(folder_id, old_type)
 
     def list_local_ignored_files(self, folder_id: str):
-        folder_path = Path(self.folder)
+        if str(self.local).startswith("fake?"):
+            raise ValueError("self.folder is None; cannot read fake stfolder.")
+
+        folder_path = self.local / folder_id
         matcher = IgnoreMatcher(folder_path)
 
         # Ask Syncthing what files it sees (non-ignored)
@@ -1084,7 +1097,10 @@ class SyncthingNode:
         return {"folder": folder_id, "ignored": sorted(ignored_files)}
 
     def list_global_ignored_files(self, folder_id: str):
-        folder_path = Path(self.folder)
+        if str(self.local).startswith("fake?"):
+            raise ValueError("self.folder is None; cannot read fake stfolder.")
+
+        folder_path = self.local / folder_id
         matcher = IgnoreMatcher(folder_path)
 
         # 1. Get all files visible locally via /db/browse
@@ -1132,7 +1148,6 @@ class SyncthingCluster:
             home.mkdir(parents=True, exist_ok=True)
             st = SyncthingNode(name=f"node{i}", role=role, base_dir=home)
             self.nodes.append(st)
-        self._active = False
 
     @property
     def device_ids(self):
@@ -1163,19 +1178,29 @@ class SyncthingCluster:
                 device["remoteGUIPort"] = "0"
                 device["numConnections"] = "0"
 
-    def setup_folder(self):
-        folder_id = "iwk3n-vemaq"
-        folder_label = "SharedFolder"
+    def setup_folder(self, folder_id: str | None = None, folder_label: str | None = None, prefix: str | None = None):
+        if folder_id is None:
+            folder_id = "data"
+        if folder_label is None:
+            folder_label = "SharedFolder"
+
         for st in self.nodes:
-            st.folder = str(self.tmpdir / st.name / "data")
-            st.folder_id = folder_id
-            Path(st.folder).mkdir(parents=True, exist_ok=True)
+            if prefix is None:
+                st.local = self.tmpdir / st.name
+            elif prefix.startswith("fake?"):
+                st.local = Path("fake")
+            else:
+                st.local = Path(prefix) / st.name
+
+            if st.local:
+                (st.local / folder_id).mkdir(parents=True, exist_ok=True)
+
             folder = st.config.append(
                 "folder",
                 attrib={
                     "id": folder_id,
                     "label": folder_label,
-                    "path": st.folder,
+                    "path": str(st.local / folder_id) if not str(st.local).startswith("fake?") else prefix,
                     "type": ROLE_TO_TYPE.get(st.role, st.role),
                     "rescanIntervalS": "3600",
                     "fsWatcherEnabled": "true",
@@ -1190,7 +1215,7 @@ class SyncthingCluster:
             versioning = folder.append("versioning")
             versioning["cleanupIntervalS"] = "3600"
             versioning["fsPath"] = ""
-            versioning["fsType"] = "basic"
+            versioning["fsType"] = "basic" if not str(st.local).startswith("fake?") else "fake"
             folder["copiers"] = "0"
             folder["pullerMaxPendingKiB"] = "0"
             folder["hashers"] = "0"
@@ -1225,6 +1250,7 @@ class SyncthingCluster:
                 folder_device["encryptionPassword"] = ""
 
             st.update_config()
+        return folder_id
 
     def wait_for_connection(self, timeout=60):
         return [st.wait_for_connection(timeout=timeout) for st in self.nodes]
@@ -1240,7 +1266,7 @@ class SyncthingCluster:
         for node in self.nodes:
             print("###", node.name)
             print("open", node.api_url)
-            print("ls", node.folder)
+            print("ls", node.local)
             print()
 
     def __iter__(self):
@@ -1248,12 +1274,11 @@ class SyncthingCluster:
 
     def __enter__(self):
         self.setup_peers()
-        self.setup_folder()
+        self.folder_id = self.setup_folder()
 
         for st in self.nodes:
             st.start()
 
-        self._active = True
         return self
 
     def __exit__(self, exc_type, exc, tb):
@@ -1263,5 +1288,3 @@ class SyncthingCluster:
         # only delete tempdir if no exception occurred
         if exc_type is None:
             shutil.rmtree(self.tmpdir, ignore_errors=True)
-
-        self._active = False
