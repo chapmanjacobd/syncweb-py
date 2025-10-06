@@ -284,6 +284,7 @@ class SyncthingNode:
         self.sync_port: int
         self.discovery_port: int
         self.folder: str
+        self.folder_id: str
 
     def update_config(self):
         was_running = self.running
@@ -1167,6 +1168,7 @@ class SyncthingCluster:
         folder_label = "SharedFolder"
         for st in self.nodes:
             st.folder = str(self.tmpdir / st.name / "data")
+            st.folder_id = folder_id
             Path(st.folder).mkdir(parents=True, exist_ok=True)
             folder = st.config.append(
                 "folder",

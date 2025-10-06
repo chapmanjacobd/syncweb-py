@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 from unittest import skip
 
-from library.utils import processes
+from library.utils import processes, devices
 
 from syncthing import SyncthingCluster, SyncthingNode
 
@@ -84,8 +84,7 @@ def validate_fstree(expected: dict, actual: dict, prefix=""):
 
 
 def check_fstree(fstree, folder):
-    # Wait for fstree to exist in folder
-    if wait_for_fstree(folder, fstree, timeout=60):
+    if wait_for_fstree(fstree, folder, timeout=60):
         tree2 = read_fstree(folder)
         if validate_fstree(fstree, tree2):
             print("Files synced successfully")
@@ -140,6 +139,56 @@ def test_w_r_move():
         # cluster.inspect()
         # input("Continue?")
 
+def test_w_r_r():
+    with SyncthingCluster(["w", "r", "r"]) as cluster:
+        cluster.wait_for_connection()
+        w, r1, r2 = cluster
+
+        r2.stop()
+
+        write_fstree({"test.txt": "hello world"}, w.folder)
+        check_fstree({"test.txt": "hello world"}, r1.folder)
+
+        # let's check that r2 can get a file from r1
+        w.stop()
+        r2.start()
+
+        check_fstree({"test.txt": "hello world"}, r2.folder)
+
+        cluster.inspect()
+        breakpoint()
+
+
+
+def test_globalignore():
+    with SyncthingCluster(["rw", "rw"]) as cluster:
+        cluster.wait_for_connection()
+        w1, w2 = cluster
+        w1.db_set_ignores(w1.folder_id, ["test.txt", "test2.txt"])
+
+        write_fstree({"test.txt": "node0"}, w1.folder)
+        write_fstree({"test2.txt": "node1"}, w2.folder)
+
+        # pprint(w2.db_file(w2.folder_id, 'test2.txt'))
+
+        cluster.inspect()
+        breakpoint()
+
+
+
+def test_globalignore_w_w():
+    with SyncthingCluster(["w", "w"]) as cluster:
+        cluster.wait_for_connection()
+        w1, w2 = cluster
+        w1.db_set_ignores(w1.folder_id, ["test.txt", "test2.txt"])
+
+        write_fstree({"test.txt": "node0"}, w1.folder)
+        write_fstree({"test2.txt": "node1"}, w2.folder)
+
+        # pprint(w2.db_file(w2.folder_id, 'test.txt'))
+
+        cluster.inspect()
+        breakpoint()
 
 def test_events():
     with SyncthingNode("node0") as node0, SyncthingNode("node1") as node1:
