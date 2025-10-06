@@ -11,7 +11,7 @@ processes.cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
 def test_fake():
     cluster = SyncthingCluster(["rw", "rw"])
     cluster.setup_peers()
-    cluster.setup_folder(prefix=f"fake?size={5 * 1000}")
+    cluster.folder_id = cluster.setup_folder(prefix=f"fake?size={5 * 1000}")
     for st in cluster.nodes:
         st.start()
     cluster.wait_for_connection()

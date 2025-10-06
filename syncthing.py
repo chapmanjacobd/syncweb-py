@@ -1188,7 +1188,7 @@ class SyncthingCluster:
             if prefix is None:
                 st.local = self.tmpdir / st.name
             elif prefix.startswith("fake?"):
-                st.local = Path("fake")
+                st.local = Path(prefix)
             else:
                 st.local = Path(prefix) / st.name
 
@@ -1200,7 +1200,7 @@ class SyncthingCluster:
                 attrib={
                     "id": folder_id,
                     "label": folder_label,
-                    "path": str(st.local / folder_id) if not str(st.local).startswith("fake?") else prefix,
+                    "path": prefix if prefix and prefix.startswith("fake?") else str(st.local / folder_id),
                     "type": ROLE_TO_TYPE.get(st.role, st.role),
                     "rescanIntervalS": "3600",
                     "fsWatcherEnabled": "true",
@@ -1210,12 +1210,12 @@ class SyncthingCluster:
                     "autoNormalize": "true",
                 },
             )
-            folder["filesystemType"] = "basic"
+            folder["filesystemType"] = "fake" if prefix and prefix.startswith("fake?") else "basic"
             folder["minDiskFree"] = {"@unit": "%", "#text": "1"}
             versioning = folder.append("versioning")
             versioning["cleanupIntervalS"] = "3600"
             versioning["fsPath"] = ""
-            versioning["fsType"] = "basic" if not str(st.local).startswith("fake?") else "fake"
+            versioning["fsType"] =  "fake" if prefix and prefix.startswith("fake?") else "basic"
             folder["copiers"] = "0"
             folder["pullerMaxPendingKiB"] = "0"
             folder["hashers"] = "0"

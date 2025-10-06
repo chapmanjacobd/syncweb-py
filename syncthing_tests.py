@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 from library.utils import processes
 import pytest
@@ -83,6 +84,7 @@ def test_malicious_node():
         with pytest.raises(ValueError):
             fstree.check({"test.txt": "good world"}, r.local / cluster.folder_id)
         # Syncthing will not prevent other nodes from writing
+        # https://github.com/syncthing/syncthing/issues/10420
 
 
 def test_w_r_r_blocks_across_folders():
@@ -110,3 +112,7 @@ def test_w_r_r_blocks_across_folders():
     with pytest.raises(TimeoutError):
         fstree.check({"test.txt": "hello world"}, r2.local / folder2)
     # Syncthing does not share blocks between folders
+
+    for st in cluster.nodes:
+        st.cleanup()
+    shutil.rmtree(cluster.tmpdir, ignore_errors=True)
