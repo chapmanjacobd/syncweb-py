@@ -52,4 +52,3 @@ The traditional web has a robust line of authority via the Domain Name System so
 ## Differences from Syncthing
 
 - Selective sync
-- Append-only folder setting. You can add files and delete your own files but you can't modify or delete other people's files--you can, of course, choose to not download them; this is similar to the traditional web where people can buy their own domain name and append their content
