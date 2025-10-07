@@ -31,6 +31,10 @@ UNDER CONSTRUCTION
 
 ### What Syncweb is
 
+> For example, a browser can be used in AFS by using “file://” rather than “http://” in addresses.  All of the powerful caching and consistence-maintenance machinery that is built into AFS would then have been accessible through a user-friendly tool that has eventually proved to be enormously valuable.  It is possible that the browser and AFS could have had a much more symbiotic evolution, as HTTP and browsers eventually did.
+>
+> Mahadev Satyanarayanan
+
 Syncweb is first and foremost file and folder oriented. The advantages to using it are that it is offline first. You can download a whole website and use the site fully offline. When you come back online the new changes and updates will be synced and your comments and interactions will be automatically uploaded. It is delay-tolerant.
 
 The disadvantage is that browser support for Syncweb URLs is virtually non-existant at this time. I have no plans to work on this aspect. Feel free to lead the charge!
