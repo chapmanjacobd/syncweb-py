@@ -2,9 +2,8 @@
 
 import argparse
 from pathlib import Path
-
 from shlex import quote
-from time import sleep
+import sys
 
 from library.utils import argparse_utils
 
@@ -13,6 +12,7 @@ from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
 
 __version__ = "0.0.1"
+
 
 def get_folder_id(args):
     if args.folder_id is None:
@@ -124,7 +124,7 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("shutdown", aliases=["stop"], help="Shut down Syncweb")
+    subparsers.add_parser("shutdown", aliases=["stop", "quit"], help="Shut down Syncweb")
     subparsers.add_parser("restart", aliases=["start"], help="Restart Syncweb")
 
     in_parser = subparsers.add_parser("init", aliases=["in", "create"], help="Create a syncweb folder")
@@ -150,25 +150,31 @@ def main():
         log.debug("syncweb --home not set; using %s", args.home)
 
     args.st = SyncthingNode(name="syncweb", base_dir=args.home)
-    args.st.start(daemonize=False)  # TODO: change to True
+    args.st.start(daemonize=True)
     args.st.wait_for_pong()
     log.info("Using %s", args.st.api_url)
 
     # cd command (mkdir, cd)
 
-    if args.command in ("list", "ls"):
-        list_files(args)
-    elif args.command in ("download", "dl"):
-        mark_unignored(args)
-    elif args.command in ("auto-download", "autodl"):
-        auto_mark_unignored(args)
-    elif args.command in ("shutdown",):
-        args.st.shutdown()
-    elif args.command in ("restart",):
-        args.st.restart()
-    elif args.command in ("init", "in", "create"):
-        args.st.set_default_ignore()
-        # TODO:
+    match args.command:
+        case "list" | "ls":
+            list_files(args)
+        case "download" | "dl":
+            mark_unignored(args)
+        case "auto-download" | "autodl":
+            auto_mark_unignored(args)
+        case "shutdown" | "stop" | "quit":
+            args.st.shutdown()
+        case "restart" | "start":
+            args.st.restart()
+        case "init" | "in" | "create":
+            args.st.set_default_ignore()
+            # TODO:
+        case _:
+            log.error("Subcommand %s not found", args.command)
+            hash_value = abs(hash(args.command))
+            code = (hash_value % 254) + 1
+            exit(code)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ def test_w_r_move():
 
         # deletes must be ignored in the destination folder
         r.config["folder"]["ignoreDelete"] = "true"
-        r.update_config()
+        r.xml_update_config()
 
         source_fstree = {"test.txt": "hello world"}
         fstree.write(source_fstree, w.local / cluster.folder_id)

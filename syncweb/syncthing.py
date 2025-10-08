@@ -1,177 +1,15 @@
-import datetime, fnmatch, os, re, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.parse
+import datetime, fnmatch, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.parse
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Generator, Iterable, List, Optional
+from typing import Iterable
 
 import requests
 from library.utils import processes
 from library.utils.log_utils import log
 
 from syncweb.config import ConfigXML
-from syncweb.syncthing_utils import LockFile
-
-
-def find_free_port(start_port: int) -> int:
-    port = start_port
-    while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                port += 1
-
-
-rel_bin = "./syncthing"
-if os.path.exists(rel_bin):
-    default_bin = os.path.realpath(rel_bin)
-else:
-    default_bin = shutil.which("syncthing") or "syncthing"
-
-
-class IgnorePattern:
-    def __init__(self, pattern: str, ignored=True, casefold=False, deletable=False):
-        self.pattern = pattern
-        self.ignored = ignored
-        self.casefold = casefold
-        self.deletable = deletable
-
-        # Convert Syncthing-style pattern to Python regex
-        pat = pattern.lstrip("/")
-        # escape, then restore wildcards
-        pat = re.escape(pat)
-        pat = pat.replace(r"\*\*", ".*").replace(r"\*", "[^/]*").replace(r"\?", ".")
-        anchor = pattern.startswith("/")
-        self.regex = re.compile(f"^{pat}$" if anchor else f"(^|.*/)({pat})$", re.IGNORECASE if casefold else 0)
-
-    def match(self, relpath: str) -> bool:
-        return bool(self.regex.search(relpath))
-
-
-class IgnoreMatcher:
-    # see interface in syncthing/lib/ignore/matcher.go
-
-    def __init__(self, folder_path: Path):
-        self.folder_path = Path(folder_path)
-        self.patterns: List[IgnorePattern] = []
-        self.load(self.folder_path / ".stignore")
-
-    def load(self, file: Path):
-        if not file.exists():
-            return
-        seen = set()
-        for line in file.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("//") or line.startswith("#"):
-                continue
-            if line in seen:
-                continue
-            seen.add(line)
-            self.patterns.extend(self.parse_line(line))
-
-    def parse_line(self, line: str) -> List[IgnorePattern]:
-        ignored = True
-        casefold = False
-        deletable = False
-
-        # parse prefixes
-        while True:
-            if line.startswith("!"):
-                ignored = not ignored
-                line = line[1:]
-            elif line.startswith("(?i)"):
-                casefold = True
-                line = line[4:]
-            elif line.startswith("(?d)"):
-                deletable = True
-                line = line[4:]
-            else:
-                break
-
-        if not line:
-            return []
-
-        pats = []
-        # rooted vs unrooted handling
-        if line.startswith("/"):
-            pats.append(IgnorePattern(line, ignored, casefold, deletable))
-        else:
-            # both direct and recursive match
-            pats.append(IgnorePattern(line, ignored, casefold, deletable))
-            pats.append(IgnorePattern("**/" + line, ignored, casefold, deletable))
-        return pats
-
-    def match(self, relpath: str) -> bool:
-        relpath = relpath.replace("\\", "/")
-        result = False
-        for p in self.patterns:
-            if p.match(relpath):
-                result = p.ignored
-        return result
-
-
-class EventSource:
-    def __init__(
-        self,
-        node: "SyncthingNode",
-        event_types: Optional[Iterable[str]] = None,
-        since: int = 0,
-        start: Optional[datetime.datetime] = None,
-        timeout: int = 60,
-        limit: int = 0,
-    ):
-        self.node = node
-        self.event_types = list(event_types or [])
-        self.since = since
-        self.start = start or datetime.datetime.now(datetime.timezone.utc)
-        self.timeout = timeout
-        self.limit = limit
-
-    def fetch_once(self) -> list[dict]:
-        params = {"since": str(self.since), "timeout": str(self.timeout)}
-        if self.limit:
-            params["limit"] = str(self.limit)
-        if self.event_types:
-            params["events"] = ",".join(self.event_types)
-
-        try:
-            resp = self.node.session.get(f"{self.node.api_url}/rest/events", params=params, timeout=self.timeout + 10)
-        except requests.RequestException as e:
-            log.warning("[%s] request failed: %s", self.node.name, e)
-            return []
-
-        if resp.status_code in (400, 404):
-            # Syncthing probably restarted or dropped event buffer
-            log.warning("[%s] Event buffer reset (status %s)", self.node.name, resp.status_code)
-            self.since = 0
-            return []
-
-        resp.raise_for_status()
-        events = resp.json()
-
-        filtered = []
-        for e in events:
-            try:
-                t = datetime.datetime.fromisoformat(e["time"].replace("Z", "+00:00"))
-            except Exception:
-                continue
-            if t >= self.start:
-                filtered.append(e)
-            self.since = max(self.since, e.get("id", self.since))
-        return filtered
-
-    def __iter__(self) -> Generator[dict, None, None]:
-        last_id = self.since
-        while True:
-            events = self.fetch_once()
-            for e in events:
-                cur_id = e.get("id", 0)
-                if last_id and cur_id > last_id + 1:
-                    log.warning("[%s] Missed events: gap from %s → %s", self.node.name, last_id, cur_id)
-                last_id = cur_id
-                yield e
-
+from syncweb.syncthing_utils import EventSource, IgnoreMatcher
 
 ROLE_TO_TYPE = {
     "r": "receiveonly",
@@ -181,15 +19,9 @@ ROLE_TO_TYPE = {
 
 
 class SyncthingNode:
-
-    def _get(self, path, **kwargs):
-        resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
-        resp.raise_for_status()
-        return resp.json()
-
-    def __init__(self, name: str = "st-node", bin: str = default_bin, base_dir=None):
+    def __init__(self, name: str = "st-node", bin=None, base_dir=None):
         self.name = name
-        self.bin = bin
+        self.bin = bin or self.find_syncthing_bin()
         self.process: subprocess.Popen
         self.sync_port: int
         self.discovery_port: int
@@ -201,33 +33,41 @@ class SyncthingNode:
         self.home_path.mkdir(parents=True, exist_ok=True)
         self.config_path = self.home_path / "config.xml"
 
-        processes.cmd(bin, f"--home={self.home_path}", "generate")
+        if not self.config_path.exists():
+            processes.cmd(self.bin, f"--home={self.home_path}", "generate")
 
         self.config = ConfigXML(self.config_path)
-        self.set_default_config()
+        self.xml_set_default_config()
 
         lock_path = self.home_path / "syncthing.lock"
         self.running: bool = lock_path.exists()
         if self.running:
+            log.info("Found lockfile, is another Syncweb instance already running? %s", lock_path)
             try:
-                r = self._get("system/ping", timeout=5)
-            except Exception:
-                log.error("Found lockfile %s is another Syncweb instance already running?", lock_path)
-                try:
-                    lock = LockFile(lock_path)
-                    if lock.acquire():
-                        lock.path.unlink(missing_ok=True)
-                    else:
-                        log.error("Could not connect to existing Syncweb instance at %s", self.api_url)
-                except Exception:
-                    log.exception("Could not unlink lockfile")
-                exit(1)
-            if r == {"ping": "pong"}:
-                self.running = True
+                if self.wait_for_pong(timeout=15):
+                    log.debug("Yes! Good thing we waited")
+                    self.running = True
+            except TimeoutError:
+                log.error("Could not connect to existing(?) Syncweb instance at %s", self.api_url)
+                self.running = False
         else:
-            self.update_config()
+            self.xml_update_config()
 
-    def set_default_config(self):
+    def _get(self, path, **kwargs):
+        resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
+        resp.raise_for_status()
+        return resp.json()
+
+    @staticmethod
+    def find_syncthing_bin():
+        rel_bin = "./syncthing"
+        if os.path.exists(rel_bin):
+            default_bin = os.path.realpath(rel_bin)
+        else:
+            default_bin = shutil.which("syncthing") or "syncthing"
+        return default_bin
+
+    def xml_set_default_config(self):
         node = self.config["device"]
         # node["@id"] = "DWFH3CZ-6D3I5HE-6LPQAHE-YGO3KQY-PX36X4V-BZORCMN-PC2V7O5-WB3KIAR"
         node["@name"] = self.name  # will use hostname by default
@@ -311,7 +151,7 @@ class SyncthingNode:
         # opts["connectionPriorityRelay"] = "50"
         # opts["connectionPriorityUpgradeThreshold"] = "0"
 
-    def update_config(self):
+    def xml_update_config(self):
         was_running = self.running
         if was_running:
             # stop nodes to be able to write configs
@@ -347,26 +187,36 @@ class SyncthingNode:
         s.headers.update({"X-API-Key": self.api_key})
         return s
 
+    @staticmethod
+    def find_free_port(start_port: int) -> int:
+        port = start_port
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    port += 1
+
     def start(self, daemonize=False):
-        self.running = getattr(self, "process", False) and self.process.poll() is None
         if self.running:
             return
+        if getattr(self, "process", False) and self.process.poll() is None:
+            self.running = True
+            return
 
-        gui_port = find_free_port(8384)
+        gui_port = self.find_free_port(8384)
         self.config["gui"]["address"] = f"127.0.0.1:{gui_port}"
         # self.sync_port = find_free_port(22000)
         # self.config["options"]["listenAddress"] = f"tcp://0.0.0.0:{self.sync_port}"
-        self.update_config()
+
+        self.xml_update_config()
 
         cmd = [self.bin, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
 
         if daemonize:
-            os_bg_kwargs = {}
-            if hasattr(os, "setpgrp"):
-                return {"start_new_session": True}
-
             z = subprocess.DEVNULL
-            self.process = subprocess.Popen(cmd, stdin=z, stdout=z, stderr=z, close_fds=True, **os_bg_kwargs)
+            self.process = subprocess.Popen(cmd, stdin=z, stdout=z, stderr=z, close_fds=True, start_new_session=True)
         else:
             self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # Give Syncthing a moment
@@ -427,7 +277,7 @@ class SyncthingNode:
         if r.stderr:
             print(r.stderr, file=sys.stderr)
 
-    def add_devices(self, peer_ids):
+    def xml_add_devices(self, peer_ids):
         for j, peer_id in enumerate(peer_ids):
             device = self.config.append(
                 "device",
@@ -451,7 +301,7 @@ class SyncthingNode:
             device["remoteGUIPort"] = "0"
             device["numConnections"] = "0"
 
-    def add_folder(self, folder_id, peer_ids, folder_type="sendreceive", folder_label=None, prefix=None):
+    def xml_add_folder(self, folder_id, peer_ids, folder_type="sendreceive", folder_label=None, prefix=None):
         is_fakefs = prefix and prefix.startswith("fake")
 
         if is_fakefs and prefix:
@@ -521,7 +371,7 @@ class SyncthingNode:
             folder_device = folder.append("device", attrib={"id": peer_id, "introducedBy": ""})
             folder_device["encryptionPassword"] = ""
 
-        self.update_config()
+        self.xml_update_config()
 
     def wait_for_connection(self, timeout=60):
         deadline = time.time() + timeout
@@ -568,8 +418,11 @@ class SyncthingNode:
         start = time.monotonic()
 
         while time.monotonic() - start < timeout:
-            if self._get("system/ping", timeout=5) == {"ping": "pong"}:
-                return True
+            try:
+                if self._get("system/ping", timeout=5) == {"ping": "pong"}:
+                    return True
+            except Exception as e:
+                log.debug("Error waiting for pong %s", e)
 
         raise TimeoutError
 
@@ -1296,13 +1149,6 @@ class SyncthingNode:
 
         return {"folder": folder_id, "ignored_global": sorted(ignored_global, key=lambda d: d["path"])}
 
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.stop()
-
 
 class SyncthingCluster:
     def __init__(self, roles, prefix="syncthing-cluster-"):
@@ -1321,14 +1167,14 @@ class SyncthingCluster:
 
     def setup_peers(self):
         for st in self.nodes:
-            st.add_devices(self.device_ids)
+            st.xml_add_devices(self.device_ids)
 
     def setup_folder(self, folder_id: str | None = None, prefix: str | None = None, folder_type: str = "sendreceive"):
         if folder_id is None:
             folder_id = "data"
 
         for idx, st in enumerate(self.nodes):
-            st.add_folder(folder_id, self.device_ids, folder_type=folder_type, prefix=self.increment_seed(prefix, idx))
+            st.xml_add_folder(folder_id, self.device_ids, folder_type=folder_type, prefix=self.increment_seed(prefix, idx))
         return folder_id
 
     @staticmethod
@@ -1364,7 +1210,7 @@ class SyncthingCluster:
         for st in self.nodes:
             for idx, st in enumerate(self.nodes):
                 role = self.roles[idx]
-                st.add_folder(self.folder_id, peer_ids=self.device_ids, folder_type=role)
+                st.xml_add_folder(self.folder_id, peer_ids=self.device_ids, folder_type=role)
             st.start()
 
         return self
