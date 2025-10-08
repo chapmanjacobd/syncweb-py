@@ -1,6 +1,6 @@
 import time
 
-from syncthing import SyncthingNode
+from syncweb.syncthing import SyncthingNode
 
 
 def check(st: SyncthingNode, folder_id, rel_paths, timeout=30) -> bool:

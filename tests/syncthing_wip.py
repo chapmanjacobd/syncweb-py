@@ -1,7 +1,7 @@
 from library.utils import processes
 
-import fstree
-from syncthing import SyncthingCluster, SyncthingNode
+import tests.fstree as fstree
+from syncweb.syncthing import SyncthingCluster, SyncthingNode
 
 processes.cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
 

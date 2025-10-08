@@ -4,8 +4,9 @@ from pathlib import Path
 import pytest
 from library.utils import processes
 
-import db, fstree
-from syncthing import SyncthingCluster
+import tests.db as db
+import tests.fstree as fstree
+from syncweb.syncthing import SyncthingCluster
 
 
 def test_rw_rw_copy():
