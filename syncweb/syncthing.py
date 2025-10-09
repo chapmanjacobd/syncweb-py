@@ -397,7 +397,7 @@ class SyncthingNode:
             "addresses": [f"tcp://127.0.0.1:{other.sync_port}"],
         }
         print(f"[{self.name}] Linking to device {other.name} ({other.device_id})")
-        self.add_device(device_cfg)
+        self.add_device(**device_cfg)
 
         # --- Add shared folder ---
         folder_path = str(self.home_path / folder_label)
@@ -434,7 +434,7 @@ class SyncthingNode:
             for b in nodes:
                 if a is not b:
                     a.add_device(
-                        {
+                        **{
                             "deviceID": b.device_id,
                             "name": b.name,
                             "addresses": [f"tcp://127.0.0.1:{b.sync_port}"],
@@ -478,13 +478,13 @@ class SyncthingNode:
         resp.raise_for_status()
         return resp.json()
 
-    def add_device(self, device_cfg: dict):
-        device_id = device_cfg.get("deviceID")
+    def add_device(self, **kwargs):
+        device_id = kwargs.get("deviceID")
         if not device_id:
-            raise ValueError("device_cfg must include a 'deviceID' field")
+            raise ValueError("kwargs must include a 'deviceID' field")
 
         print(f"[{self.name}] Adding device {device_id}")
-        return self._post("config/devices", json=device_cfg)
+        return self._post("config/devices", json=kwargs)
 
     def patch_device(self, device_id: str, patch: dict):
         """Partially update an existing device."""
@@ -506,13 +506,8 @@ class SyncthingNode:
         resp.raise_for_status()
         return resp.json()
 
-    def add_folder(self, folder_cfg: dict):
-        folder_id = folder_cfg.get("id")
-        if not folder_id:
-            raise ValueError("folder_cfg must include an 'id' field")
-
-        print(f"[{self.name}] Adding folder {folder_id}")
-        return self._post("config/folders", json=folder_cfg)
+    def add_folder(self, **kwargs):
+        return self._post("config/folders", json=kwargs)
 
     def patch_folder(self, folder_id: str, patch: dict):
         resp = self.session.patch(f"{self.api_url}/rest/config/folders/{folder_id}", json=patch)
