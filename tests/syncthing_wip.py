@@ -1,7 +1,7 @@
 from library.utils import processes
 
 import tests.fstree as fstree
-from syncweb.syncthing import SyncthingCluster, SyncthingNode
+from syncweb.syncthing import SyncthingCluster
 
 processes.cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
 
@@ -34,19 +34,6 @@ def test_globalignore_w_w():
 
         cluster.inspect()
         breakpoint()
-
-
-def test_events():
-    with SyncthingNode("node0") as node0, SyncthingNode("node1") as node1:
-        node0.start()
-        for event in node0.event_source():
-            print(event)
-
-        node1.start()
-
-        evt = node0.wait_for_event("FolderSummary", timeout=15)
-        if evt:
-            print("Got FolderSummary:", evt)
 
 
 def test_w_w_r_copy():

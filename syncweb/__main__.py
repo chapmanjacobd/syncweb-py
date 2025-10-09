@@ -1,87 +1,18 @@
 #!/usr/bin/env python3
 
-import argparse
+import argparse, os, sys
 from pathlib import Path
-from shlex import quote
-import sys
 
 from library.utils import argparse_utils
 
-from syncweb import cmd_utils
+from syncweb import cmd_utils, syncweb
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
 
 __version__ = "0.0.1"
 
 
-def get_folder_id(args):
-    if args.folder_id is None:
-        try:
-            args.folder_id = args.st.folder_id(args.folder)
-        except FileNotFoundError:
-            log.error("--folder-id not set and not inside of an Syncweb folder")
-            raise SystemExit(3)
-    return args.folder_id
-
-
-def list_files(args):
-    for path in args.paths:
-        try:
-            folder_id = args.st.folder_id(args.folder)
-        except FileNotFoundError:
-            log.error('"%s" is not inside of a Syncweb folder', quote(path))
-            continue
-
-        result = args.st("db/browse", folder=folder_id, prefix=path)
-        files = result.get("files", [])
-        dirs = result.get("directories", [])
-
-        log.info(f"Listing under '{path}' (folder: {folder_id})")
-        for d in dirs:
-            log.info(f"[dir] {d}")
-        for f in files:
-            log.info(f"      {f}")
-
-
-def mark_unignored(args):
-    for path in args.paths:
-        try:
-            folder_id = args.st.folder_id(args.folder)
-        except FileNotFoundError:
-            log.error('"%s" is not inside of a Syncweb folder', quote(path))
-            continue
-
-        ignores = args.st.db_ignores(folder_id)
-        new_ignores = [p for p in ignores if p not in args.paths]
-
-        if new_ignores != ignores:
-            args.st.set_ignores(new_ignores)
-            log.info(f"Unignored {len(ignores) - len(new_ignores)} entries")
-        else:
-            log.info("No matching ignored files found.")
-
-
-def auto_mark_unignored(args):
-    result = args.st._get("db/browse", folder=args.st.folder_id, prefix="")
-    files = result.get("files", [])
-
-    eligible = [
-        f
-        for f in files
-        if f.get("size", 0) >= args.min_size and (args.max_size is None or f.get("size", 0) <= args.max_size)
-    ]
-
-    log.info(f"Found {len(eligible)} files within size range.")
-    if args.dry_run:
-        for f in eligible[:50]:
-            log.info(f"[dry-run] would unignore {f['name']}")
-        return
-
-    paths = [f["name"] for f in eligible]
-    # mark_unignored(st, paths)
-
-
-def main():
+def cli():
     parser = argparse.ArgumentParser(prog="syncweb", description="Syncweb: an offline-first distributed web")
     parser.add_argument(
         "--home", type=Path, default=None, help="Base directory for syncweb state (default: platform-specific)"
@@ -121,14 +52,39 @@ def main():
     )
     parser.add_argument("--simulate", "--dry-run", action="store_true")
     parser.add_argument("--no-confirm", "--yes", "-y", action="store_true")
+    parser.add_argument("--version", "-V", action="store_true")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser("version", aliases=["v"], help="Print Syncweb version")
     subparsers.add_parser("shutdown", aliases=["stop", "quit"], help="Shut down Syncweb")
     subparsers.add_parser("restart", aliases=["start"], help="Restart Syncweb")
 
+    add_parser = subparsers.add_parser("add", aliases=["import", "clone"], help="Import syncweb folders/devices")
+    add_parser.add_argument(
+        "paths",
+        nargs="+",
+        action=argparse_utils.ArgparseList,
+        help="""URL format
+
+        Add a device and folder
+        syncweb://folder-id#device-id
+
+        Add a device and folder and mark a subfolder or file for immediate download
+        syncweb://folder-id/subfolder/file#device-id
+""",
+    )
+
     in_parser = subparsers.add_parser("init", aliases=["in", "create"], help="Create a syncweb folder")
     in_parser.add_argument("path", nargs="?", default=".", help="Path relative to the root")
+
+    de_parser = subparsers.add_parser("device", aliases=["share"], help="Add a device to syncweb")
+    de_parser.add_argument(
+        "device_ids",
+        nargs="+",
+        action=argparse_utils.ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
+    )
 
     ls_parser = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level")
     ls_parser.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
@@ -145,6 +101,11 @@ def main():
 
     args = parser.parse_args()
 
+    if args.version:
+        print(__version__)
+        exit(0)
+    log.info("Syncweb v%s :: %s", __version__, os.path.realpath(sys.path[0]))
+
     if args.home is None:
         args.home = cmd_utils.default_state_dir("syncweb")
         log.debug("syncweb --home not set; using %s", args.home)
@@ -152,24 +113,35 @@ def main():
     args.st = SyncthingNode(name="syncweb", base_dir=args.home)
     args.st.start(daemonize=True)
     args.st.wait_for_pong()
-    log.info("Using %s", args.st.api_url)
+    log.info("%s", args.st.version["longVersion"])
+    log.info("API %s", args.st.api_url)
+    log.info("DATA %s", args.st.home_path)
 
     # cd command (mkdir, cd)
 
     match args.command:
-        case "list" | "ls":
-            list_files(args)
-        case "download" | "dl":
-            mark_unignored(args)
-        case "auto-download" | "autodl":
-            auto_mark_unignored(args)
+        case "version" | "v":
+            print(f"Syncweb v{__version__}")
+            print("Syncthing", args.st.version["version"])
         case "shutdown" | "stop" | "quit":
             args.st.shutdown()
         case "restart" | "start":
             args.st.restart()
+        case "list" | "ls":
+            syncweb.list_files(args)
+        case "download" | "dl":
+            syncweb.mark_unignored(args)
+        case "auto-download" | "autodl":
+            syncweb.auto_mark_unignored(args)
         case "init" | "in" | "create":
             args.st.set_default_ignore()
-            # TODO:
+            # offer to add devices
+        case "accept" | "add":
+            # add device
+            # add to autojoin folders
+            # investigate autoaccept and introducer functions
+            # args.st.add_device(args)
+            pass
         case _:
             log.error("Subcommand %s not found", args.command)
             hash_value = abs(hash(args.command))
@@ -178,4 +150,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cli()

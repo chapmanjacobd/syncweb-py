@@ -2,14 +2,13 @@ import datetime, fnmatch, os, shutil, socket, subprocess, sys, tempfile, threadi
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Iterable
 
 import requests
 from library.utils import processes
 from library.utils.log_utils import log
 
 from syncweb.config import ConfigXML
-from syncweb.syncthing_utils import EventSource, IgnoreMatcher
+from syncweb.syncthing_utils import IgnoreMatcher
 
 ROLE_TO_TYPE = {
     "r": "receiveonly",
@@ -42,7 +41,7 @@ class SyncthingNode:
         lock_path = self.home_path / "syncthing.lock"
         self.running: bool = lock_path.exists()
         if self.running:
-            log.info("Found lockfile, is another Syncweb instance already running? %s", lock_path)
+            log.debug("Found lockfile, is another Syncweb instance already running? %s", lock_path)
             try:
                 if self.wait_for_pong(timeout=15):
                     log.debug("Yes! Good thing we waited")
@@ -169,6 +168,10 @@ class SyncthingNode:
     @property
     def api_url(self):
         return "http://" + str(self.config["gui"]["address"])
+
+    @cached_property
+    def version(self):
+        return self._get("system/version")
 
     @cached_property
     def device_id(self):
@@ -373,6 +376,154 @@ class SyncthingNode:
 
         self.xml_update_config()
 
+    def link(self, other: "SyncthingNode", folder_id: str, folder_label: str | None = None, type_: str = "sendreceive"):
+        """
+        Link this node with another node by:
+        - Adding the other device to this node's config.
+        - Adding a shared folder with matching ID and correct device references.
+
+        Args:
+            other: Another SyncthingNode instance.
+            folder_id: The folder ID to share (e.g. "testdata").
+            folder_label: Optional label for the folder.
+            type_: Folder type for this node ("sendonly", "receiveonly", "sendreceive").
+        """
+        folder_label = folder_label or folder_id
+
+        # --- Add other device ---
+        device_cfg = {
+            "deviceID": other.device_id,
+            "name": other.name,
+            "addresses": [f"tcp://127.0.0.1:{other.sync_port}"],
+        }
+        print(f"[{self.name}] Linking to device {other.name} ({other.device_id})")
+        self.add_device(device_cfg)
+
+        # --- Add shared folder ---
+        folder_path = str(self.home_path / folder_label)
+        os.makedirs(folder_path, exist_ok=True)
+
+        folder_cfg = {
+            "id": folder_id,
+            "label": folder_label,
+            "path": folder_path,
+            "type": type_,
+            "devices": [{"deviceID": self.device_id}, {"deviceID": other.device_id}],
+        }
+        print(f"[{self.name}] Adding folder {folder_id} ({type_}) shared with {other.name}")
+        self.add_folder(folder_cfg)
+
+    @classmethod
+    def autolink(
+        cls,
+        nodes: list["SyncthingNode"],
+        roles: list[str] | None = None,
+        folder_id: str = "shared",
+        label: str = "shared",
+    ):
+        if not nodes:
+            raise ValueError("No nodes provided to autolink")
+
+        if roles and len(roles) != len(nodes):
+            raise ValueError("Length of roles must match number of nodes if provided")
+
+        print(f"[*] Autolinking {len(nodes)} nodes into shared folder '{folder_id}'")
+
+        # Make sure all devices are mutually visible
+        for a in nodes:
+            for b in nodes:
+                if a is not b:
+                    a.add_device(
+                        {
+                            "deviceID": b.device_id,
+                            "name": b.name,
+                            "addresses": [f"tcp://127.0.0.1:{b.sync_port}"],
+                        }
+                    )
+
+        # Each node adds the same folder, with its own type
+        for i, node in enumerate(nodes):
+            role = roles[i] if roles else "sendreceive"
+            folder_path = node.home_path / label
+            folder_path.mkdir(exist_ok=True)
+
+            folder_cfg = {
+                "id": folder_id,
+                "label": label,
+                "path": str(folder_path),
+                "type": role,
+                "devices": [{"deviceID": n.device_id} for n in nodes],
+            }
+            print(f"[{node.name}] Adding shared folder '{folder_id}' as {role}")
+            node.add_folder(folder_cfg)
+
+    def get_restart_required(self) -> bool:
+        """Return True if a restart is required for config changes to take effect."""
+        resp = self.session.get(f"{self.api_url}/rest/config/restart-required")
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("restartRequired", False)
+
+    def restart_if_required(self, wait_ready: bool = True, timeout: int = 15):
+        if self.get_restart_required():
+            print(f"[{self.name}] Restart required, restarting...")
+            self.restart()
+
+    def get_config_restart_required(self) -> bool:
+        return bool(self._get("config/restart-required").get("requiresRestart", False))
+
+    def get_devices(self):
+        """Return all configured devices."""
+        resp = self.session.get(f"{self.api_url}/rest/config/devices")
+        resp.raise_for_status()
+        return resp.json()
+
+    def add_device(self, device_cfg: dict):
+        device_id = device_cfg.get("deviceID")
+        if not device_id:
+            raise ValueError("device_cfg must include a 'deviceID' field")
+
+        print(f"[{self.name}] Adding device {device_id}")
+        return self._post("config/devices", json=device_cfg)
+
+    def patch_device(self, device_id: str, patch: dict):
+        """Partially update an existing device."""
+        resp = self.session.patch(f"{self.api_url}/rest/config/devices/{device_id}", json=patch)
+        resp.raise_for_status()
+        self.restart_if_required()
+
+    def list_devices(self):
+        """Return a list of all configured devices."""
+        r = self.session.get(f"{self.api_url}/rest/config/devices")
+        r.raise_for_status()
+        return r.json()
+
+    # === FOLDER CONFIG ===
+
+    def get_folders(self):
+        """Return all configured folders."""
+        resp = self.session.get(f"{self.api_url}/rest/config/folders")
+        resp.raise_for_status()
+        return resp.json()
+
+    def add_folder(self, folder_cfg: dict):
+        folder_id = folder_cfg.get("id")
+        if not folder_id:
+            raise ValueError("folder_cfg must include an 'id' field")
+
+        print(f"[{self.name}] Adding folder {folder_id}")
+        return self._post("config/folders", json=folder_cfg)
+
+    def patch_folder(self, folder_id: str, patch: dict):
+        resp = self.session.patch(f"{self.api_url}/rest/config/folders/{folder_id}", json=patch)
+        resp.raise_for_status()
+        self.restart_if_required()
+
+    def list_folders(self):
+        r = self.session.get(f"{self.api_url}/rest/config/folders")
+        r.raise_for_status()
+        return r.json()
+
     def wait_for_connection(self, timeout=60):
         deadline = time.time() + timeout
 
@@ -396,23 +547,6 @@ class SyncthingNode:
         for error in errors:
             print(error, file=sys.stderr)
         raise TimeoutError
-
-    def event_source(
-        self,
-        event_types: Iterable[str] | None = None,
-        start: datetime.datetime | None = None,
-        limit: int = 100,
-    ) -> EventSource:
-        return EventSource(self, event_types=event_types, start=start, limit=limit)
-
-    def wait_for_event(self, event_type: str, timeout: float = 10.0) -> dict | None:
-        start = time.monotonic()
-        for evt in self.event_source([event_type]):
-            if evt.get("type") == event_type:
-                return evt
-            if time.monotonic() - start > timeout:
-                print(f"[{self.name}] Timed out waiting for {event_type}")
-                return None
 
     def wait_for_pong(self, timeout: float = 30.0):
         start = time.monotonic()
@@ -1149,6 +1283,13 @@ class SyncthingNode:
 
         return {"folder": folder_id, "ignored_global": sorted(ignored_global, key=lambda d: d["path"])}
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+
 
 class SyncthingCluster:
     def __init__(self, roles, prefix="syncthing-cluster-"):
@@ -1174,7 +1315,9 @@ class SyncthingCluster:
             folder_id = "data"
 
         for idx, st in enumerate(self.nodes):
-            st.xml_add_folder(folder_id, self.device_ids, folder_type=folder_type, prefix=self.increment_seed(prefix, idx))
+            st.xml_add_folder(
+                folder_id, self.device_ids, folder_type=folder_type, prefix=self.increment_seed(prefix, idx)
+            )
         return folder_id
 
     @staticmethod

@@ -41,7 +41,7 @@ def test_w_r_move():
             "syncthing_send.py",
             "--interval=1",
             "--timeout=30s",
-            f"--port={w.gui_port}",
+            f"--port={w.api_url.split(":")[-1]}",
             f"--api-key={w.api_key}",
             w.local / cluster.folder_id,
             strict=False,
@@ -115,7 +115,7 @@ def test_w_r_r_blocks_across_folders():
     # Syncthing does not share blocks between folders
 
     for st in cluster.nodes:
-        st.cleanup()
+        st.stop()
     shutil.rmtree(cluster.tmpdir, ignore_errors=True)
 
 

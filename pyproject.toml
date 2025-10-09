@@ -1,11 +1,29 @@
 [project]
 name = "syncweb"
-dependencies = ["argcomplete>=3.6.2", "library>=3.0.127"]
+dependencies = ["argcomplete>=3.6.2", "library>=3.0.127", "idna>=3.10"]
 description = "Syncweb: an offline-first distributed web"
 dynamic = ["version"]
 license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11"
+
+[project.urls]
+documentation = "https://github.com/chapmanjacobd/syncweb-py#usage"
+homepage = "https://github.com/chapmanjacobd/syncweb-py#readme"
+repository = "https://github.com/chapmanjacobd/syncweb-py/"
+
+[project.scripts]
+syncweb = "syncweb.__main__:cli"
+
+[tool.pdm]
+version = {source = "file", path = "syncweb/__main__.py"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["syncweb", "tests"]
 
 [project.optional-dependencies]
 dev = ["black", "isort", "ssort"]
