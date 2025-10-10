@@ -72,13 +72,13 @@ def test_malicious_node():
         cluster.wait_for_connection()
         w, r, mal = cluster
 
-        r.db_set_ignores(cluster.folder_id, ["test.txt"])
+        r.set_ignores(cluster.folder_id, ["test.txt"])
         fstree.write({"test.txt": "good world"}, w.local / cluster.folder_id)
         db.check(r, r.local / cluster.folder_id, ["test.txt"])
         w.stop()
 
         fstree.write({"test.txt": "bad world"}, mal.local / cluster.folder_id)
-        r.db_set_ignores(cluster.folder_id, [])
+        r.set_ignores(cluster.folder_id, [])
         fstree.check({"test.txt": "bad world"}, r.local / cluster.folder_id)
         w.start()
 
@@ -100,7 +100,7 @@ def test_w_r_r_blocks_across_folders():
 
     r2.stop()
 
-    r1.db_set_ignores(folder2, ["test.txt"])
+    r1.set_ignores(folder2, ["test.txt"])
     fstree.write({"test.txt": "hello world"}, w.local / folder1)
     fstree.write({"test.txt": "hello world"}, w.local / folder2)
 
@@ -108,7 +108,7 @@ def test_w_r_r_blocks_across_folders():
     fstree.check({}, r1.local / folder2)
     w.stop()
 
-    r1.db_set_ignores(folder2, [])
+    r1.set_ignores(folder2, [])
     r2.start()
     with pytest.raises(TimeoutError):
         fstree.check({"test.txt": "hello world"}, r2.local / folder2)

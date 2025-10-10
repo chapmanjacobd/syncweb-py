@@ -5,10 +5,10 @@ from pathlib import Path
 
 from library.utils import argparse_utils
 
-from syncweb import cmd_utils, str_utils
+from syncweb import cmd_utils
 from syncweb.cli import SubParser
 from syncweb.log_utils import log
-from syncweb.syncthing import SyncthingNode
+from syncweb.syncweb import Syncweb
 
 __version__ = "0.0.1"
 
@@ -22,59 +22,26 @@ def cmd_restart(args):
     print("Restarting Syncweb...")
     args.st.restart()
 
+
 def cmd_shutdown(args):
     print("Shutting down Syncweb...")
     args.st.shutdown()
 
-def cmd_add(args):
-    args.st.set_default_ignore()
 
-    for path in args.paths:
-        ref = str_utils.parse_syncweb_path(path, decode=args.decode)
+def cmd_accept(args):
+    added = args.st.cmd_accept(args.device_ids)
+    print("Added", added, "device" if added == 1 else "devices")
 
-        if ref.device_id:
-            args.st = SyncthingNode()
-            args.st.add_device(deviceID=ref.device_id)
-            devices = args.st.get_devices()
-            raise
 
 def cmd_init(args):
-    args.st.set_default_ignore()
+    added = args.st.cmd_init(args.paths)
+    print("Added", added, "folder" if added == 1 else "folders")
 
-    # if :// in args.path
-    # if folder exists
-    # if file, add parent folder and unignore only the file?
-    # hash args.path to create folder-id? or folder-id provided by Syncthing if not set?
 
-    ref = str_utils.parse_syncweb_path(args.path, decode=args.decode)
-    if ref.folder_id:
-        args.st = SyncthingNode()
-        args.st.add_folder(path=args.path, type="sendonly")
-        raise
-
-"""
-        case "accept" | "add":
-            # add device
-            # add to autojoin folders
-            # investigate autoaccept and introducer functions
-            # args.st.add_device(args)
-            pass
-
-        case "list" | "ls":
-            syncweb.list_files(args)
-        case "download" | "dl":
-            syncweb.mark_unignored(args)
-        case "auto-download" | "autodl":
-            syncweb.auto_mark_unignored(args)
-        case _:
-            log.error("Subcommand %s not found", args.command)
-            hash_value = abs(hash(args.command))
-            code = (hash_value % 254) + 1
-            exit(code)
-
-    magic wormhole like copy and move
-
-"""
+def cmd_add(args):
+    added_devices, added_folders = args.st.cmd_add(args.urls)
+    print("Added", added_devices, "device" if added_devices == 1 else "devices")
+    print("Added", added_folders, "folder" if added_folders == 1 else "folders")
 
 
 def cli():
@@ -99,7 +66,12 @@ def cli():
         action=argparse_utils.ArgparseList,
         help="Include only specific file extensions",
     )
-    parser.add_argument("--decode", help="Decode percent-encoding and punycode in URLs", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--decode",
+        help="Decode percent-encoding and punycode in URLs",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--simulate", "--dry-run", action="store_true")
     parser.add_argument("--no-confirm", "--yes", "-y", action="store_true")
 
@@ -110,9 +82,26 @@ def cli():
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
 
-    add_parser = subparsers.add_parser("add", aliases=["import", "clone"], help="Import syncweb folders/devices", func=cmd_add)
+    fo_parser = subparsers.add_parser(
+        "folders", aliases=["folder", "fo", "init", "in", "create"], help="Create a syncweb folder", func=cmd_init
+    )
+    fo_parser.add_argument("paths", nargs="*", default=".", help="Path to folder")
+
+    de_parser = subparsers.add_parser(
+        "devices", aliases=["device", "de", "accept"], help="Add a device to syncweb", func=cmd_accept
+    )
+    de_parser.add_argument(
+        "device_ids",
+        nargs="+",
+        action=argparse_utils.ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
+    )
+
+    add_parser = subparsers.add_parser(
+        "add", aliases=["import", "join", "clone"], help="Import syncweb folders/devices", func=cmd_add
+    )
     add_parser.add_argument(
-        "paths",
+        "urls",
         nargs="+",
         action=argparse_utils.ArgparseList,
         help="""URL format
@@ -123,17 +112,6 @@ def cli():
         Add a device and folder and mark a subfolder or file for immediate download
         syncweb://folder-id/subfolder/file#device-id
 """,
-    )
-
-    in_parser = subparsers.add_parser("init", aliases=["in", "create"], help="Create a syncweb folder", func=cmd_init)
-    in_parser.add_argument("path", nargs="?", default=".", help="Path to folder")
-
-    de_parser = subparsers.add_parser("device", aliases=["share"], help="Add a device to syncweb")
-    de_parser.add_argument(
-        "device_ids",
-        nargs="+",
-        action=argparse_utils.ArgparseList,
-        help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
     ls_parser = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level")
@@ -149,7 +127,6 @@ def cli():
     )
     autodl_parser.add_argument("--min-size", type=int, default=0, help="Minimum file size (bytes)")
     autodl_parser.add_argument("--max-size", type=int, default=None, help="Maximum file size (bytes)")
-    autodl_parser.add_argument("--dry-run", action="store_true", help="Show what would be unignored without applying")
 
     args = subparsers.parse()
 
@@ -158,7 +135,7 @@ def cli():
         args.home = cmd_utils.default_state_dir("syncweb")
         log.debug("syncweb --home not set; using %s", args.home)
 
-    args.st = SyncthingNode(name="syncweb", base_dir=args.home)
+    args.st = Syncweb(name="syncweb", base_dir=args.home)
     args.st.start(daemonize=True)
     args.st.wait_for_pong()
     log.info("%s", args.st.version["longVersion"])

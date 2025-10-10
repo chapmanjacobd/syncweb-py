@@ -1,4 +1,4 @@
-import os, re
+import base64, hashlib, os, re
 from contextlib import suppress
 from pathlib import Path
 from typing import NamedTuple
@@ -172,3 +172,27 @@ def parse_syncweb_path(value: str, decode: bool = True) -> FolderRef:
         subpath = f"{subpath}/"
 
     return FolderRef(folder_id=folder_id, subpath=subpath, device_id=device_id)
+
+
+def path_hash(path_string: str) -> str:
+    abs_path = os.path.abspath(path_string)
+
+    hash_object = hashlib.sha1(abs_path.encode("utf-8"))
+    hash_bytes = hash_object.digest()  # 20 bytes
+    short_hash = base64.urlsafe_b64encode(hash_bytes).decode("utf-8").rstrip("=")
+    return short_hash
+
+
+def basename(path):
+    """A basename() variant which first strips the trailing slash, if present.
+    Thus we always get the last component of the path, even for directories.
+
+    e.g.
+    >>> os.path.basename('/bar/foo')
+    'foo'
+    >>> os.path.basename('/bar/foo/')
+    ''
+    """
+    path = os.fspath(path)
+    sep = os.path.sep + (os.path.altsep or "")
+    return os.path.basename(path.rstrip(sep))

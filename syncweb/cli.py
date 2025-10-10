@@ -1,6 +1,8 @@
 import argparse, sys
 from typing import Any, Callable, Dict, List, Optional
+
 from syncweb.log_utils import log
+
 
 class Subcommand:
     def __init__(
@@ -85,7 +87,7 @@ class SubParser:
         # global_argv = argv[:cmd_index]
         # subcmd_argv = argv[cmd_index + 1:]
 
-        log.debug("argv: %s",argv)
+        log.debug("argv: %s", argv)
         global_args, rest = self.parser.parse_known_args(argv)
         log.debug("global_args: %s", global_args)
         log.debug("cmd: %s, rest: %s", rest[0], rest[1:])
@@ -98,7 +100,7 @@ class SubParser:
         # parse command args
         args = cmd._parser.parse_args(rest[1:])
         for k, v in vars(global_args).items():
-            if getattr(args, k, None) is None :
+            if getattr(args, k, None) is None:
                 setattr(args, k, v)
 
         if not cmd.func:
