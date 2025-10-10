@@ -45,10 +45,7 @@ def cmd_add(args):
 
 
 def cmd_ls(args):
-    if args.levels is None:
-        args.levels = 0 if args.recursive else 1
-
-    args.st.cmd_ls(**vars(args))
+    args.st.cmd_ls(args)
 
 
 def cli():
@@ -129,17 +126,10 @@ def cli():
         "--human-readable",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="print sizes in human readable format (e.g., 1K, 234M, 2G)",
+        help="print sizes in human readable format",
     )
     ls.add_argument("--show-all", "--all", "-a", action="store_true", help="do not ignore entries starting with .")
-    ls.add_argument(
-        "-L",
-        "--levels",
-        type=int,
-        default=None,
-        metavar="N",
-        help="descend N directory levels deep (default: 1 (current level only); 0 if --recursive)",
-    )
+    ls.add_argument("--depth", "-D", "--levels", type=int, default=0, metavar="N", help="descend N directory levels deep")
     ls.add_argument("--recursive", "-R", action="store_true", help="list subdirectories recursively")
     ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
 

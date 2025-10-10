@@ -136,12 +136,19 @@ class Syncweb(SyncthingNode):
             }
             self._put(f"config/devices/{dev_id}", json=cfg)
 
-    def cmd_ls(self, /, paths, **kwargs):
-        if kwargs["long"] and not kwargs["no_header"]:
-            print(f"{'Type':<4} {'Size':>10}  {'Modified':>12}  Name")
-            print("-" * 60)
+    def cmd_ls(self, args):
+        header_printed = not(args.long and not args.no_header)
 
-        for path in paths:
+        def print_header():
+            nonlocal header_printed
+
+            HEADER_FORMAT = "{:<4} {:>10}  {:>12}  {}"
+            HEADER_LINE = HEADER_FORMAT.format('Type', 'Size', 'Modified', 'Name')
+            print(HEADER_LINE)
+            print("-" * len(HEADER_LINE))
+            header_printed = True
+
+        for path in args.paths:
             abs_path = Path(path).resolve()
             try:
                 folder_id, prefix = self.path2folder_id(abs_path)
@@ -149,21 +156,15 @@ class Syncweb(SyncthingNode):
                 log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
                 continue
 
-            data = self.files(folder_id, levels=kwargs["levels"], prefix=prefix)
+            levels = None if args.recursive else args.depth
+            data = self.files(folder_id, levels=levels, prefix=prefix)
             log.debug("self.files: %s data", len(data))
-            self.print_directory(data, **kwargs)
 
-    def print_directory(
-        self,
-        items: list[dict],
-        long: bool = False,
-        human_readable: bool = False,
-        show_all: bool = False,
-        levels: int = 0,
-        current_level: int = 1,
-        indent: int = 0,
-        **kwargs,
-    ) -> None:
+            if data and not header_printed:
+                print_header()
+            self.print_directory(args, data)
+
+    def print_directory(self, args, items, current_level: int = 1, indent: int = 0) -> None:
         sorted_items = sorted(
             items,
             key=lambda x: (
@@ -177,7 +178,7 @@ class Syncweb(SyncthingNode):
             name = item.get("name", "")
 
             # skip hidden files unless show_all is True
-            if not show_all and name.startswith("."):
+            if not args.show_all and name.startswith("."):
                 continue
 
             # print indentation when recursive listing
@@ -185,33 +186,18 @@ class Syncweb(SyncthingNode):
                 prefix = "  " * indent
                 print(prefix, end="")
 
-            self.print_entry(item, long, human_readable, show_all)
+            self.print_entry(item, args.long, args.human_readable)
 
-            should_recurse = (
-                Syncweb.is_directory(item) and "children" in item and (levels is None or current_level < levels)
-            )
-
+            should_recurse = Syncweb.is_directory(item) and "children" in item and (current_level < args.depth)
             if should_recurse:
                 if indent == 0:
                     print(f"\n\x1b[4m{name}\x1b[0m:")
-                self.print_directory(
-                    item["children"],
-                    long,
-                    human_readable,
-                    show_all,
-                    levels,
-                    current_level + 1,
-                    indent + 1,
-                )
+                self.print_directory(args, item["children"], current_level + 1, indent + 1)
                 if indent == 0:
                     print()
 
-    def print_entry(self, item: dict, long: bool = False, human_readable: bool = False, show_all: bool = False) -> None:
+    def print_entry(self, item: dict, long: bool = False, human_readable: bool = False) -> None:
         name = item.get("name", "")
-
-        # Skip hidden files unless show_all is True
-        if not show_all and name.startswith("."):
-            return
 
         is_dir = Syncweb.is_directory(item)
         # Add visual indicator for directories
