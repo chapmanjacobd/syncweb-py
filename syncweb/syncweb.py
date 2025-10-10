@@ -34,10 +34,12 @@ class Syncweb(SyncthingNode):
             if ref.device_id:
                 self.add_device(deviceID=ref.device_id)
                 device_count += 1
+
             if ref.folder_id:
                 default_path = self.default_folder()["path"]
                 if not default_path:
                     default_path = os.path.realpath(".")
+                    self.set_default_folder(path=default_path)
 
                 path = os.path.join(default_path, ref.folder_id)
                 os.makedirs(path, exist_ok=True)
@@ -47,10 +49,13 @@ class Syncweb(SyncthingNode):
                 self.set_ignores(folder_id)
                 folder_count += 1
 
+                # TODO: add devices to folder
                 if ref.subpath:
                     # TODO: ask to confirm if ref.subpath == "/" ?
                     # or check size first?
                     self.add_ignores(folder_id, [ref.subpath])
+
+            raise
 
         return device_count, folder_count
 

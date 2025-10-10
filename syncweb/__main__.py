@@ -78,6 +78,7 @@ def cli():
     subparsers = SubParser(parser, default_command="help", version=__version__)
     subparsers.add_parser("help", help="Show this help message", func=lambda a: subparsers.print_help())
     subparsers.add_parser("version", help="Show Syncweb version", func=cmd_version)
+    subparsers.add_parser("repl", help="Talk to Syncthing API", func=lambda a: (self := a.st) and breakpoint())
 
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)

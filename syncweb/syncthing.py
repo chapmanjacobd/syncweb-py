@@ -144,163 +144,6 @@ class SyncthingNode:
         # opts["connectionPriorityRelay"] = "50"
         # opts["connectionPriorityUpgradeThreshold"] = "0"
 
-    def xml_update_config(self):
-        was_running = self.running
-        if was_running:
-            self.stop()  # stop node to be able to write configs
-
-        self.config.save()
-
-        if was_running:
-            self.start()
-
-    @property
-    def api_key(self):
-        return str(self.config["gui"]["apikey"])
-
-    @property
-    def api_url(self):
-        return "http://" + str(self.config["gui"]["address"])
-
-    @cached_property
-    def session(self):
-        s = requests.Session()
-        s.headers.update({"X-API-Key": self.api_key})
-        return s
-
-    def _get(self, path, **kwargs):
-        resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
-        if resp.text:
-            log.debug(resp.text)
-        resp.raise_for_status()
-        return resp.json()
-
-    def _put(self, path, **kwargs):
-        resp = self.session.put(f"{self.api_url}/rest/{path}", **kwargs)
-        if resp.text:
-            log.debug(resp.text)
-        resp.raise_for_status()
-        return resp.json() if resp.text else None
-
-    def _post(self, path, json=None, **kwargs):
-        resp = self.session.post(f"{self.api_url}/rest/{path}", json=json, **kwargs)
-        if resp.text:
-            log.debug(resp.text)
-        resp.raise_for_status()
-        return resp.json() if resp.text else None
-
-    def _patch(self, path, **kwargs):
-        resp = self.session.patch(f"{self.api_url}/rest/{path}", **kwargs)
-        if resp.text:
-            log.debug(resp.text)
-        resp.raise_for_status()
-        return resp.json() if resp.text else None
-
-    def _delete(self, path, **kwargs):
-        resp = self.session.delete(f"{self.api_url}/rest/{path}", **kwargs)
-        if resp.text:
-            log.debug(resp.text)
-        if resp.status_code == 404:
-            log.warning("404 Not Found %s", path)
-        else:
-            resp.raise_for_status()
-        return resp
-
-    @cached_property
-    def version(self):
-        return self._get("system/version")
-
-    @cached_property
-    def device_id(self):
-        if not self.running:
-            self.start()
-        try:
-            return self.get_device_id()
-        except TimeoutError:
-            # relies on initial empty config
-            log.warning("GUI Port is not set; relying on XML which may be incorrect")
-            return str(self.config["device"]["@id"])
-
-    def file(self, folder_id: str, relative_path: str):
-        params = {"folder": folder_id, "file": urllib.parse.quote(relative_path, safe="")}
-
-        resp = self.session.get("db/file", params=params)
-        if resp.status_code == 404:
-            log.warning("404 Not Found %s", relative_path)
-        else:
-            resp.raise_for_status()
-        return resp
-
-    @staticmethod
-    def find_free_port(start_port: int) -> int:
-        port = start_port
-        while True:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                try:
-                    s.bind(("127.0.0.1", port))
-                    return port
-                except OSError:
-                    port += 1
-
-    def start(self, daemonize=False):
-        if self.running:
-            return
-        if getattr(self, "process", False) and self.process.poll() is None:
-            self.running = True
-            return
-
-        gui_port = self.find_free_port(8384)
-        self.config["gui"]["address"] = f"127.0.0.1:{gui_port}"
-        # self.sync_port = find_free_port(22000)
-        # self.config["options"]["listenAddress"] = f"tcp://0.0.0.0:{self.sync_port}"
-
-        self.xml_update_config()
-
-        cmd = [self.bin, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
-
-        if daemonize:
-            z = subprocess.DEVNULL
-            self.process = subprocess.Popen(cmd, stdin=z, stdout=z, stderr=z, close_fds=True, start_new_session=True)
-        else:
-            self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        # Give Syncthing a moment
-        time.sleep(0.5)
-        self.running = True
-
-    def shutdown(self):
-        return self._post("system/shutdown")
-
-    def restart(self):
-        return self._post("system/restart")
-
-    def stop(self):
-        if not getattr(self, "process", None):
-            return
-
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-        else:
-            print(self.name, "exited already")
-
-        if self.process.stdout and not self.process.stdout.closed:
-            self.log()
-
-        self.running = False
-
-    def log(self):
-        r = processes.Pclose(self.process)
-
-        if r.returncode != 0:
-            print(self.name, "exited", r.returncode)
-        if r.stdout:
-            print(r.stdout)
-        if r.stderr:
-            print(r.stderr, file=sys.stderr)
-
     def xml_add_devices(self, peer_ids):
         for j, peer_id in enumerate(peer_ids):
             device = self.config.append(
@@ -397,30 +240,131 @@ class SyncthingNode:
 
         self.xml_update_config()
 
-    def path2folder_id(self, path: Path):
-        config = self._get("system/config")
-        abs_path = path.resolve()
+    def xml_update_config(self):
+        was_running = self.running
+        if was_running:
+            self.stop()  # stop node to be able to write configs
 
-        for folder in config.get("folders", []):
-            folder_path = Path(folder["path"]).resolve()
+        self.config.save()
+
+        if was_running:
+            self.start()
+
+    @staticmethod
+    def find_free_port(start_port: int) -> int:
+        port = start_port
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    port += 1
+
+    def start(self, daemonize=False):
+        if self.running:
+            return
+        if getattr(self, "process", False) and self.process.poll() is None:
+            self.running = True
+            return
+
+        gui_port = self.find_free_port(8384)
+        self.config["gui"]["address"] = f"127.0.0.1:{gui_port}"
+        # self.sync_port = find_free_port(22000)
+        # self.config["options"]["listenAddress"] = f"tcp://0.0.0.0:{self.sync_port}"
+
+        self.xml_update_config()
+
+        cmd = [self.bin, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
+
+        if daemonize:
+            z = subprocess.DEVNULL
+            self.process = subprocess.Popen(cmd, stdin=z, stdout=z, stderr=z, close_fds=True, start_new_session=True)
+        else:
+            self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # Give Syncthing a moment
+        time.sleep(0.5)
+        self.running = True
+
+    def stop(self):
+        if not getattr(self, "process", None):
+            return
+
+        if self.process.poll() is None:
+            self.process.terminate()
             try:
-                abs_path.relative_to(folder_path)
-                return folder["id"]
-            except ValueError:
-                continue
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+        else:
+            print(self.name, "exited already")
 
-        # RuntimeError(f"Current directory {abs_path} is not inside any Syncthing folder")
-        raise FileNotFoundError
+        if self.process.stdout and not self.process.stdout.closed:
+            self.log()
 
-    def is_restart_required(self) -> bool:
-        resp = self._get("config/restart-required")
-        return resp.get("restartRequired", False)
+        self.running = False
 
-    def devices(self):
-        return self._get("config/devices")
+    def log(self):
+        r = processes.Pclose(self.process)
 
-    def add_device(self, **kwargs):
-        return self._post("config/devices", json=kwargs)
+        if r.returncode != 0:
+            print(self.name, "exited", r.returncode)
+        if r.stdout:
+            print(r.stdout)
+        if r.stderr:
+            print(r.stderr, file=sys.stderr)
+
+    @property
+    def api_key(self):
+        return str(self.config["gui"]["apikey"])
+
+    @property
+    def api_url(self):
+        return "http://" + str(self.config["gui"]["address"])
+
+    @cached_property
+    def session(self):
+        s = requests.Session()
+        s.headers.update({"X-API-Key": self.api_key})
+        return s
+
+    def _get(self, path, **kwargs):
+        resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _put(self, path, **kwargs):
+        resp = self.session.put(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
+        resp.raise_for_status()
+        return resp.json() if resp.text else None
+
+    def _post(self, path, json=None, **kwargs):
+        resp = self.session.post(f"{self.api_url}/rest/{path}", json=json, **kwargs)
+        if resp.text:
+            log.debug(resp.text)
+        resp.raise_for_status()
+        return resp.json() if resp.text else None
+
+    def _patch(self, path, **kwargs):
+        resp = self.session.patch(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
+        resp.raise_for_status()
+        return resp.json() if resp.text else None
+
+    def _delete(self, path, **kwargs):
+        resp = self.session.delete(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s", path)
+        else:
+            resp.raise_for_status()
+        return resp
 
     def wait_for_pong(self, timeout: float = 30.0):
         start = time.monotonic()
@@ -435,27 +379,7 @@ class SyncthingNode:
 
         raise TimeoutError
 
-    def status(self, retries=5, delay=1):
-        for _ in range(retries):
-            try:
-                status = self._get("system/status")
-                return status
-            except Exception:
-                time.sleep(delay)
-        raise RuntimeError("Failed to get status of Syncthing node")
-
-    def get_device_id(self, retries=15, delay=0.5):
-        for _ in range(retries):
-            try:
-                status = self._get("system/status")
-                return status["myID"]
-            except Exception:
-                time.sleep(delay)
-
-        log.warning("Failed to get device ID from Syncthing node")
-        raise TimeoutError
-
-    def wait_for_connection(self, timeout=60):
+    def wait_for_node(self, timeout=60):
         deadline = time.time() + timeout
 
         if getattr(self, "process", False):
@@ -479,11 +403,105 @@ class SyncthingNode:
             print(error, file=sys.stderr)
         raise TimeoutError
 
-    def delete_device(self, device_id: str):
-        self._delete(f"config/devices/{device_id}")
+    def shutdown(self):
+        return self._post("system/shutdown")
+
+    def restart(self):
+        return self._post("system/restart")
+
+    def is_restart_required(self) -> bool:
+        resp = self._get("config/restart-required")
+        return resp.get("restartRequired", False)
+
+    @cached_property
+    def version(self):
+        return self._get("system/version")
+
+    def status(self, retries=5, delay=1):
+        for _ in range(retries):
+            try:
+                status = self._get("system/status")
+                return status
+            except Exception:
+                time.sleep(delay)
+        raise RuntimeError("Failed to get status of Syncthing node")
 
     def system_errors(self):
         return self._get("system/error")
+
+    def get_config(self):
+        return self._get("config")
+
+    def replace_config(self, config: dict):
+        config = self.get_config() | config
+        return self._put("config", json=config)
+
+    def get_device_id(self, retries=15, delay=0.5):
+        for _ in range(retries):
+            try:
+                status = self._get("system/status")
+                return status["myID"]
+            except Exception:
+                time.sleep(delay)
+
+        log.warning("Failed to get device ID from Syncthing node")
+        raise TimeoutError
+
+    @cached_property
+    def device_id(self):
+        if not self.running:
+            self.start()
+        try:
+            return self.get_device_id()
+        except TimeoutError:
+            # relies on initial empty config
+            log.warning("GUI Port is not set; relying on XML which may be incorrect")
+            return str(self.config["device"]["@id"])
+
+    def devices(self):
+        return self._get("config/devices")
+
+    def add_device(self, **kwargs):
+        return self._post("config/devices", json=kwargs)
+
+    def delete_device(self, device_id: str):
+        return self._delete(f"config/devices/{device_id}")
+
+    def device_stats(self):
+        return self._get("stats/device")
+
+    def path2folder_id(self, path: Path):
+        config = self._get("system/config")
+        abs_path = path.resolve()
+
+        for folder in config.get("folders", []):
+            folder_path = Path(folder["path"]).resolve()
+            try:
+                abs_path.relative_to(folder_path)
+                return folder["id"]
+            except ValueError:
+                continue
+
+        # RuntimeError(f"Current directory {abs_path} is not inside any Syncthing folder")
+        raise FileNotFoundError
+
+    def folder_status(self, folder_id: str):
+        return self._get("db/status", params={"folder": folder_id})
+
+    def default_folder(self):
+        return self._get("config/defaults/folder")
+
+    def set_default_folder(self, **kwargs):
+        kwargs = self.default_folder() | kwargs
+        return self._put("config/defaults/folder", json=kwargs)
+
+    def default_ignores(self):
+        return self._get("config/defaults/ignores")
+
+    def set_default_ignores(self, lines: list[str] | None = None):
+        if lines is None:
+            lines = ["*"]
+        return self._put("config/defaults/ignores", json={"lines": lines})
 
     def ignores(self, folder_id: str):
         return self._get("db/ignores", params={"folder": folder_id})
@@ -491,37 +509,33 @@ class SyncthingNode:
     def set_ignores(self, folder_id: str, lines: list[str] | None = None):
         if lines is None:
             lines = ["*"]
-        return self._post("db/ignores", params={"folder": folder_id}, json={"lines": lines})
+        return self._post("db/ignores", params={"folder": folder_id}, json={"ignore": lines})
+
+    def folder(self, folder_id: str):
+        return self._get(f"config/folders/{folder_id}")
 
     def folders(self):
         return self._get("config/folders")
 
     def add_folder(self, **kwargs):
+        kwargs = self.default_folder() | kwargs
         return self._post("config/folders", json=kwargs)
 
     def delete_folder(self, folder_id: str):
         return self._delete(f"config/folders/{folder_id}")
 
-    def default_folder(self):
-        return self._get("config/defaults/folder")
-
-    def set_default_folder(self, **kwargs):
-        return self._put("config/defaults/folder", json=kwargs)
-
     def folder_stats(self):
         return self._get("stats/folder")
 
-    def device_stats(self):
-        return self._get("stats/device")
+    def file(self, folder_id: str, relative_path: str):
+        params = {"folder": folder_id, "file": urllib.parse.quote(relative_path, safe="")}
 
-    def db_status(self, folder_id: str):
-        return self._get("db/status", params={"folder": folder_id})
-
-    def get_config(self):
-        return self._get("config")
-
-    def replace_config(self, config: dict):
-        return self._put("config", json=config)
+        resp = self.session.get("db/file", params=params)
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s", relative_path)
+        else:
+            resp.raise_for_status()
+        return resp
 
     def __enter__(self):
         self.start()
@@ -567,7 +581,7 @@ class SyncthingCluster:
         return prefix
 
     def wait_for_connection(self, timeout=60):
-        return [st.wait_for_connection(timeout=timeout) for st in self.nodes]
+        return [st.wait_for_node(timeout=timeout) for st in self.nodes]
 
     def start(self):
         [st.start() for st in self.nodes]
