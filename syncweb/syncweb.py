@@ -16,13 +16,11 @@ class Syncweb(SyncthingNode):
         return str_utils.path_hash(path)
 
     def cmd_accept(self, device_ids):
-        self.set_default_ignore()
-
         device_count = 0
         for path in device_ids:
             try:
                 device_id = str_utils.extract_device_id(path)
-                self.add_device(id=device_id)
+                self.add_device(deviceID=device_id)
                 device_count += 1
             except ValueError:
                 log.error("Invalid Device ID %s", path)
@@ -30,13 +28,11 @@ class Syncweb(SyncthingNode):
         return device_count
 
     def cmd_add(self, urls, decode=True):
-        self.set_default_ignore()
-
         device_count, folder_count = 0, 0
         for url in urls:
             ref = str_utils.parse_syncweb_path(url, decode=decode)
             if ref.device_id:
-                self.add_device(id=ref.device_id)
+                self.add_device(deviceID=ref.device_id)
                 device_count += 1
             if ref.folder_id:
                 default_path = self.default_folder()["path"]
@@ -48,6 +44,7 @@ class Syncweb(SyncthingNode):
 
                 folder_id = self.create_folder_id(path)
                 self.add_folder(id=folder_id, path=path, type="receiveonly")
+                self.set_ignores(folder_id)
                 folder_count += 1
 
                 if ref.subpath:
@@ -58,14 +55,13 @@ class Syncweb(SyncthingNode):
         return device_count, folder_count
 
     def cmd_init(self, paths):
-        self.set_default_ignore()
-
         folder_count = 0
         for path in paths:
             os.makedirs(path, exist_ok=True)
 
             folder_id = self.create_folder_id(path)
             self.add_folder(id=folder_id, path=path, type="sendonly")
+            self.set_ignores(folder_id)
             folder_count += 1
         return folder_count
 

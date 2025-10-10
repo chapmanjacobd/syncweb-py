@@ -40,7 +40,7 @@ class SyncthingNode:
         lock_path = self.home_path / "syncthing.lock"
         self.running: bool = lock_path.exists()
         if self.running:
-            log.debug("Found lockfile, is another Syncweb instance already running? %s", lock_path)
+            log.debug("Found lockfile, is a Syncweb instance already running? %s", lock_path)
             try:
                 if self.wait_for_pong(timeout=15):
                     log.debug("Yes! Good thing we waited")
@@ -170,26 +170,36 @@ class SyncthingNode:
 
     def _get(self, path, **kwargs):
         resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
         resp.raise_for_status()
         return resp.json()
 
     def _put(self, path, **kwargs):
         resp = self.session.put(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
         resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _post(self, path, json=None, **kwargs):
         resp = self.session.post(f"{self.api_url}/rest/{path}", json=json, **kwargs)
+        if resp.text:
+            log.debug(resp.text)
         resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _patch(self, path, **kwargs):
         resp = self.session.patch(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
         resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _delete(self, path, **kwargs):
         resp = self.session.delete(f"{self.api_url}/rest/{path}", **kwargs)
+        if resp.text:
+            log.debug(resp.text)
         if resp.status_code == 404:
             log.warning("404 Not Found %s", path)
         else:
@@ -482,11 +492,6 @@ class SyncthingNode:
         if lines is None:
             lines = ["*"]
         return self._post("db/ignores", params={"folder": folder_id}, json={"lines": lines})
-
-    def set_default_ignore(self, lines: list[str] | None = None):
-        if lines is None:
-            lines = ["*"]
-        return self._put("config/defaults/ignores", json={"lines": lines})
 
     def folders(self):
         return self._get("config/folders")
