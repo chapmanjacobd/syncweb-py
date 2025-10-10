@@ -1,9 +1,11 @@
-import base64, hashlib, os, re
+import base64, datetime, hashlib, os, re
 from contextlib import suppress
+from datetime import timezone as tz
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 
+import humanize
 from idna import decode as puny_decode
 
 from syncweb.log_utils import log
@@ -196,3 +198,57 @@ def basename(path):
     path = os.fspath(path)
     sep = os.path.sep + (os.path.altsep or "")
     return os.path.basename(path.rstrip(sep))
+
+
+def file_size(n):
+    return humanize.naturalsize(n, binary=True).replace(" ", "")
+
+
+def safe_int(s) -> int | None:
+    if not s:
+        return None
+    try:
+        return int(float(s))
+    except Exception:
+        return None
+
+
+def safe_float(s) -> float | None:
+    if not s:
+        return None
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def relative_datetime(seconds) -> str:
+    seconds = safe_float(seconds)
+    if not seconds:
+        return ""
+
+    try:
+        dt = datetime.datetime.fromtimestamp(seconds, tz=tz.utc).astimezone()
+    except (ValueError, OSError, OverflowError):
+        return ""
+
+    now = datetime.datetime.now(tz=tz.utc).astimezone()
+    delta = now - dt
+    if abs(delta.days) < 45:
+        # Today
+        if now.date() == dt.date():
+            return dt.strftime("today, %H:%M")
+        elif now < dt:
+            # Tomorrow
+            if now.date() == (dt - datetime.timedelta(days=1)).date():
+                return dt.strftime("tomorrow, %H:%M")
+            # In a few days
+            return dt.strftime(f"in {abs(delta.days)} days, %H:%M")
+        else:
+            # Yesterday
+            if now.date() == (dt + datetime.timedelta(days=1)).date():
+                return dt.strftime("yesterday, %H:%M")
+            # A few days ago
+            return dt.strftime(f"{delta.days} days ago, %H:%M")
+
+    return dt.strftime("%Y-%m-%d %H:%M")

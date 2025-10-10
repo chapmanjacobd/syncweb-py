@@ -10,7 +10,7 @@ def test_globalignore():
     with SyncthingCluster(["rw", "rw"]) as cluster:
         cluster.wait_for_connection()
         w1, w2 = cluster
-        w1.db_set_ignores(cluster.folder_id, ["test.txt", "test2.txt"])
+        w1.set_ignores(cluster.folder_id, ["test.txt", "test2.txt"])
 
         fstree.write({"test.txt": "node0"}, w1.local)
         fstree.write({"test2.txt": "node1"}, w2.local)
@@ -25,7 +25,7 @@ def test_globalignore_w_w():
     with SyncthingCluster(["w", "w"]) as cluster:
         cluster.wait_for_connection()
         w1, w2 = cluster
-        w1.db_set_ignores(cluster.folder_id, ["test.txt", "test2.txt"])
+        w1.set_ignores(cluster.folder_id, ["test.txt", "test2.txt"])
 
         fstree.write({"test.txt": "node0"}, w1.local)
         fstree.write({"test2.txt": "node1"}, w2.local)

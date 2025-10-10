@@ -1,7 +1,6 @@
-import os, shutil, socket, subprocess, sys, tempfile, time
+import os, shutil, socket, subprocess, sys, tempfile, time, urllib.parse
 from functools import cached_property
 from pathlib import Path
-import urllib.parse
 
 import requests
 from library.utils import processes
@@ -16,7 +15,7 @@ ROLE_TO_TYPE = {
 }
 
 
-class SyncthingNode:
+class SyncthingNodeXML:
     def __init__(self, name: str = "st-node", bin=None, base_dir=None):
         self.name = name
         self.bin = bin or self.find_syncthing_bin()
@@ -315,18 +314,8 @@ class SyncthingNode:
             print(r.stderr, file=sys.stderr)
 
     @property
-    def api_key(self):
-        return str(self.config["gui"]["apikey"])
-
-    @property
     def api_url(self):
         return "http://" + str(self.config["gui"]["address"])
-
-    @cached_property
-    def session(self):
-        s = requests.Session()
-        s.headers.update({"X-API-Key": self.api_key})
-        return s
 
     def _get(self, path, **kwargs):
         resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
@@ -334,6 +323,29 @@ class SyncthingNode:
             log.debug(resp.text)
         resp.raise_for_status()
         return resp.json()
+
+    def wait_for_pong(self, timeout: float = 30.0):
+        start = time.monotonic()
+
+        while time.monotonic() - start < timeout:
+            try:
+                if self._get("system/ping", timeout=5) == {"ping": "pong"}:
+                    return True
+            except Exception as e:
+                log.debug("Error waiting for pong %s", e)
+            time.sleep(0.5)
+
+        raise TimeoutError
+
+    @property
+    def api_key(self):
+        return str(self.config["gui"]["apikey"])
+
+    @cached_property
+    def session(self):
+        s = requests.Session()
+        s.headers.update({"X-API-Key": self.api_key})
+        return s
 
     def _put(self, path, **kwargs):
         resp = self.session.put(f"{self.api_url}/rest/{path}", **kwargs)
@@ -366,19 +378,8 @@ class SyncthingNode:
             resp.raise_for_status()
         return resp
 
-    def wait_for_pong(self, timeout: float = 30.0):
-        start = time.monotonic()
 
-        while time.monotonic() - start < timeout:
-            try:
-                if self._get("system/ping", timeout=5) == {"ping": "pong"}:
-                    return True
-            except Exception as e:
-                log.debug("Error waiting for pong %s", e)
-            time.sleep(0.5)
-
-        raise TimeoutError
-
+class SyncthingNode(SyncthingNodeXML):
     def wait_for_node(self, timeout=60):
         deadline = time.time() + timeout
 
@@ -470,19 +471,29 @@ class SyncthingNode:
     def device_stats(self):
         return self._get("stats/device")
 
-    def path2folder_id(self, path: Path):
-        config = self._get("system/config")
-        abs_path = path.resolve()
+    def pause(self, device_id: str | None = None):
+        params = {}
+        if device_id:  # when omitted pauses all devices
+            params["device"] = device_id
+        return self._post("system/pause", params=params)
 
-        for folder in config.get("folders", []):
+    def resume(self, device_id: str | None = None):
+        params = {}
+        if device_id:  # when omitted resumes all devices
+            params["device"] = device_id
+        return self._post("system/resume", params=params)
+
+    def path2folder_id(self, absolute_path):
+        abs_path = Path(absolute_path)
+
+        for folder in self.folders() or []:
             folder_path = Path(folder["path"]).resolve()
             try:
-                abs_path.relative_to(folder_path)
-                return folder["id"]
+                prefix = abs_path.relative_to(folder_path)
+                return folder["id"], str(prefix) if prefix and str(prefix) != "." else None
             except ValueError:
                 continue
 
-        # RuntimeError(f"Current directory {abs_path} is not inside any Syncthing folder")
         raise FileNotFoundError
 
     def folder_status(self, folder_id: str):
@@ -524,8 +535,23 @@ class SyncthingNode:
     def delete_folder(self, folder_id: str):
         return self._delete(f"config/folders/{folder_id}")
 
+    def reset_folder(self, folder_id: str | None = None):
+        params = {}
+        if folder_id:  # when omitted resets whole DB
+            params["folder"] = folder_id
+        return self._post("system/reset", params=params)
+
     def folder_stats(self):
         return self._get("stats/folder")
+
+    def files(self, folder_id: str, levels: int | None = None, prefix: str | None = None):
+        params = {"folder": folder_id}
+        if levels is not None:
+            params["levels"] = str(levels)
+        if prefix is not None:
+            params["prefix"] = prefix
+
+        return self._get("db/browse", params=params)
 
     def file(self, folder_id: str, relative_path: str):
         params = {"folder": folder_id, "file": urllib.parse.quote(relative_path, safe="")}
@@ -536,6 +562,62 @@ class SyncthingNode:
         else:
             resp.raise_for_status()
         return resp
+
+    def folder_revert(self, receiveonly_folder_id: str):
+        return self._post("db/revert", json={"folder": receiveonly_folder_id})
+
+    def folder_override(self, sendonly_folder_id: str):
+        return self._post("db/override", json={"folder": sendonly_folder_id})
+
+    def prioritize_file_transfer(self, folder_id: str, file_path: str):
+        return self._post(f"db/prio", params={"folder": folder_id, "file": file_path})
+
+    @staticmethod
+    def paged_fn(fn, *args, **kwargs):
+        page = 1
+        per_page = 50000
+        all_files = []
+        while True:
+            resp = fn(*args, **kwargs, page=page, perpage=per_page)
+            progress = resp.get("progress", [])
+            queued = resp.get("queued", [])
+            rest = resp.get("rest", [])
+            log.debug("%s got %s progress, %s queued, %s rest", fn.__func__.__qualname__, progress, queued, rest)
+
+            batch = progress + queued + rest
+            if not batch:
+                break
+            all_files.extend(batch)
+            # Stop if fewer than per_page items were returned (last page)
+            if len(batch) < per_page:
+                break
+            page += 1
+
+        return all_files
+
+    def _remoteneed(self, **kwargs):
+        return self._get("db/remoteneed", params=kwargs)
+
+    def remoteneed(self, folder_id: str):
+        return self.paged_fn(self._remoteneed, folder=folder_id)
+
+    def _need(self, **kwargs):
+        return self._get("db/need", params=kwargs)
+
+    def need(self, folder_id: str):
+        return self.paged_fn(self._need, folder=folder_id)
+
+    def _localchanged(self, **kwargs):
+        return self._get("db/localchanged", params=kwargs)
+
+    def localchanged(self, folder_id: str):
+        return self.paged_fn(self._localchanged, folder=folder_id)
+
+    def _folder_errors(self, **kwargs):
+        return self._get("folder/errors", params=kwargs)
+
+    def folder_errors(self, folder_id: str):
+        return self.paged_fn(self._folder_errors, folder=folder_id)
 
     def __enter__(self):
         self.start()

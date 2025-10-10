@@ -44,6 +44,13 @@ def cmd_add(args):
     print("Added", added_folders, "folder" if added_folders == 1 else "folders")
 
 
+def cmd_ls(args):
+    if args.levels is None:
+        args.levels = 0 if args.recursive else 1
+
+    args.st.cmd_ls(**vars(args))
+
+
 def cli():
     parser = argparse.ArgumentParser(prog="syncweb", description="Syncweb: an offline-first distributed web")
     parser.add_argument("--home", type=Path, help="Base directory for syncweb metadata (default: platform-specific)")
@@ -83,25 +90,25 @@ def cli():
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
 
-    fo_parser = subparsers.add_parser(
+    folders = subparsers.add_parser(
         "folders", aliases=["folder", "fo", "init", "in", "create"], help="Create a syncweb folder", func=cmd_init
     )
-    fo_parser.add_argument("paths", nargs="*", default=".", help="Path to folder")
+    folders.add_argument("paths", nargs="*", default=".", help="Path to folder")
 
-    de_parser = subparsers.add_parser(
+    devices = subparsers.add_parser(
         "devices", aliases=["device", "de", "accept"], help="Add a device to syncweb", func=cmd_accept
     )
-    de_parser.add_argument(
+    devices.add_argument(
         "device_ids",
         nargs="+",
         action=argparse_utils.ArgparseList,
         help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
-    add_parser = subparsers.add_parser(
+    syncweb_urls = subparsers.add_parser(
         "add", aliases=["import", "join", "clone"], help="Import syncweb folders/devices", func=cmd_add
     )
-    add_parser.add_argument(
+    syncweb_urls.add_argument(
         "urls",
         nargs="+",
         action=argparse_utils.ArgparseList,
@@ -115,19 +122,38 @@ def cli():
 """,
     )
 
-    ls_parser = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level")
-    ls_parser.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
+    ls = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level", func=cmd_ls)
+    ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
+    ls.add_argument("--long", "-l", action="store_true", help="use long listing format")
+    ls.add_argument(
+        "--human-readable",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="print sizes in human readable format (e.g., 1K, 234M, 2G)",
+    )
+    ls.add_argument("--show-all", "--all", "-a", action="store_true", help="do not ignore entries starting with .")
+    ls.add_argument(
+        "-L",
+        "--levels",
+        type=int,
+        default=None,
+        metavar="N",
+        help="descend N directory levels deep (default: 1 (current level only); 0 if --recursive)",
+    )
+    ls.add_argument("--recursive", "-R", action="store_true", help="list subdirectories recursively")
+    ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
 
     subparsers.add_parser("cd", help="Change directory helper")
+    # TODO: add autocomplete via local metadata
 
-    dl_parser = subparsers.add_parser("download", aliases=["dl"], help="Mark files as unignored for download")
-    dl_parser.add_argument("paths", nargs="+", help="Paths or globs of files to unignore")
+    download = subparsers.add_parser("download", aliases=["dl"], help="Mark files as unignored for download")
+    download.add_argument("paths", nargs="+", help="Paths or globs of files to unignore")
 
-    autodl_parser = subparsers.add_parser(
-        "auto-download", aliases=["autodl"], help="Automatically unignore files based on size"
+    autodownload = subparsers.add_parser(
+        "auto-download", aliases=["autodl"], help="Automatically download files based on size"
     )
-    autodl_parser.add_argument("--min-size", type=int, default=0, help="Minimum file size (bytes)")
-    autodl_parser.add_argument("--max-size", type=int, default=None, help="Maximum file size (bytes)")
+    autodownload.add_argument("--min-size", type=int, default=0, help="Minimum file size (bytes)")
+    autodownload.add_argument("--max-size", type=int, default=None, help="Maximum file size (bytes)")
 
     args = subparsers.parse()
 

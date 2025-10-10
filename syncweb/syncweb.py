@@ -1,4 +1,7 @@
-import os
+import datetime, fnmatch, os, shlex
+from pathlib import Path
+
+import requests
 
 from syncweb import str_utils
 from syncweb.log_utils import log
@@ -90,81 +93,6 @@ class Syncweb(SyncthingNode):
 
         self.set_ignores(folder_id, lines=ordered)
 
-
-"""
-
-        case "list" | "ls":
-            syncweb.list_files(args)
-        case "download" | "dl":
-            syncweb.mark_unignored(args)
-        case "auto-download" | "autodl":
-            syncweb.auto_mark_unignored(args)
-        case _:
-            log.error("Subcommand %s not found", args.command)
-            hash_value = abs(hash(args.command))
-            code = (hash_value % 254) + 1
-            exit(code)
-
-    magic wormhole like copy and move
-"""
-
-
-'''
-
-    def _is_ignored(self, rel_path: Path, patterns: list[str]) -> bool:
-        s = str(rel_path)
-        for pat in patterns:
-            if fnmatch.fnmatch(s, pat):
-                return True
-            if fnmatch.fnmatch(s + "/", pat):  # match directories
-                return True
-        return False
-
-    def disk_usage(self) -> list[dict]:
-        results = []
-        for folder in self._get("config/folders"):
-            folder_id = folder["id"]
-            folder_path = Path(folder["path"])
-
-            if not folder_path.exists():
-                print(f"[{self.name}] Folder '{folder_id}' path not found: {folder_path}")
-                continue
-
-            folder_id = folder_path
-            ignore_patterns = self.ignores(folder_id)
-
-            for dirpath, dirnames, filenames in os.walk(folder_path):
-                rel_dir = Path(dirpath).relative_to(folder_path)
-                ignored = self._is_ignored(rel_dir, ignore_patterns)
-
-                total_size = 0
-                last_mod = 0
-
-                for f in filenames:
-                    fpath = Path(dirpath) / f
-                    try:
-                        stat = fpath.stat()
-                    except FileNotFoundError:
-                        continue
-                    total_size += stat.st_size
-                    last_mod = max(last_mod, stat.st_mtime)
-
-                if total_size == 0 and not filenames:
-                    continue  # skip empty dirs
-
-                results.append(
-                    {
-                        "folder": folder_id,
-                        "name": str(rel_dir) if rel_dir != Path(".") else ".",
-                        "size": total_size,
-                        "last_modified": datetime.datetime.fromtimestamp(last_mod),
-                        "ignored": ignored,
-                    }
-                )
-
-        return results
-
-
     def delete_device_peered_folders(self, device_id: str):
         folders = self._get("config/folders")
         if not folders:
@@ -207,6 +135,129 @@ class Syncweb(SyncthingNode):
                 "introducer": False,
             }
             self._put(f"config/devices/{dev_id}", json=cfg)
+
+    def cmd_ls(self, /, paths, **kwargs):
+        if kwargs["long"] and not kwargs["no_header"]:
+            print(f"{'Type':<4} {'Size':>10}  {'Modified':>12}  Name")
+            print("-" * 60)
+
+        for path in paths:
+            abs_path = Path(path).resolve()
+            try:
+                folder_id, prefix = self.path2folder_id(abs_path)
+            except FileNotFoundError:
+                log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
+                continue
+
+            data = self.files(folder_id, levels=kwargs["levels"], prefix=prefix)
+            log.debug("self.files: %s data", len(data))
+            self.print_directory(data, **kwargs)
+
+    def print_directory(
+        self,
+        items: list[dict],
+        long: bool = False,
+        human_readable: bool = False,
+        show_all: bool = False,
+        levels: int = 0,
+        current_level: int = 1,
+        indent: int = 0,
+        **kwargs,
+    ) -> None:
+        sorted_items = sorted(
+            items,
+            key=lambda x: (
+                -Syncweb.calculate_depth(x),
+                not Syncweb.is_directory(x),
+                x.get("name", "").lower(),
+            ),
+        )
+
+        for item in sorted_items:
+            name = item.get("name", "")
+
+            # skip hidden files unless show_all is True
+            if not show_all and name.startswith("."):
+                continue
+
+            # print indentation when recursive listing
+            if indent > 0:
+                prefix = "  " * indent
+                print(prefix, end="")
+
+            self.print_entry(item, long, human_readable, show_all)
+
+            should_recurse = (
+                Syncweb.is_directory(item) and "children" in item and (levels is None or current_level < levels)
+            )
+
+            if should_recurse:
+                if indent == 0:
+                    print(f"\n\x1b[4m{name}\x1b[0m:")
+                self.print_directory(
+                    item["children"],
+                    long,
+                    human_readable,
+                    show_all,
+                    levels,
+                    current_level + 1,
+                    indent + 1,
+                )
+                if indent == 0:
+                    print()
+
+    def print_entry(self, item: dict, long: bool = False, human_readable: bool = False, show_all: bool = False) -> None:
+        name = item.get("name", "")
+
+        # Skip hidden files unless show_all is True
+        if not show_all and name.startswith("."):
+            return
+
+        is_dir = Syncweb.is_directory(item)
+        # Add visual indicator for directories
+        display_name = f"{name}/" if is_dir else name
+
+        if long:
+            type_char = "d" if is_dir else "-"
+            size = Syncweb.folder_size(item) if is_dir else item.get("size", 0)
+            size_str = str_utils.file_size(size) if human_readable else str(size)
+            time_str = self.format_time(item.get("modTime", ""), long)
+
+            print(f"{type_char:<4} {size_str:>10}  {time_str:>12}  {display_name}")
+        else:
+            print(display_name)
+
+    @staticmethod
+    def folder_size(item: dict) -> int:
+        if not Syncweb.is_directory(item) or "children" not in item:
+            return item.get("size", 0)
+
+        total = 0
+        for child in item["children"]:
+            total += Syncweb.folder_size(child)
+        return total
+
+    @staticmethod
+    def calculate_depth(item: dict) -> int:
+        if not Syncweb.is_directory(item) or "children" not in item or not item["children"]:
+            return 0
+
+        return 1 + max(Syncweb.calculate_depth(child) for child in item["children"])
+
+    @staticmethod
+    def is_directory(item: dict) -> bool:
+        return item.get("type") == "FILE_INFO_TYPE_DIRECTORY"
+
+    @staticmethod
+    def format_time(mod_time: str, long_format: bool = False) -> str:
+        if not long_format:
+            return ""
+
+        try:
+            dt = datetime.datetime.fromisoformat(mod_time.replace("Z", "+00:00"))
+            return dt.strftime("%b %d %H:%M")
+        except (ValueError, AttributeError):
+            return mod_time[:16] if mod_time else ""
 
     def accept_pending_folders(self, folder_id: str | None = None):
         pending = self._get("cluster/pending/folders")
@@ -256,186 +307,57 @@ class Syncweb(SyncthingNode):
                 }
                 self._post("config/folders", json=cfg)
 
-    def db_local_changed(self, folder_id: str, page: int = 1, per_page: int = 0):
-        params = {"folder": folder_id}
-        if page > 0:
-            params["page"] = str(page)
-        if per_page > 0:
-            params["perpage"] = str(per_page)
-        return self._get("db/localchanged", params=params)
+    def _is_ignored(self, rel_path: Path, patterns: list[str]) -> bool:
+        s = str(rel_path)
+        for pat in patterns:
+            if fnmatch.fnmatch(s, pat):
+                return True
+            if fnmatch.fnmatch(s + "/", pat):  # match directories
+                return True
+        return False
 
-    def db_local_changed_all(self, folder_id: str):
-        all_files = []
-        page = 1
-        per_page = 50
+    def disk_usage(self) -> list[dict]:
+        results = []
+        for folder in self._get("config/folders"):
+            folder_id = folder["id"]
+            folder_path = Path(folder["path"])
 
-        while True:
-            resp = self.db_local_changed(folder_id, page=page, per_page=per_page)
-            batch = resp.get("progress", []) + resp.get("queued", []) + resp.get("rest", [])
-            if not batch:
-                break
-            all_files.extend(batch)
+            if not folder_path.exists():
+                print(f"[{self.name}] Folder '{folder_id}' path not found: {folder_path}")
+                continue
 
-            if len(batch) < per_page:
-                break
-            page += 1
+            ignore_patterns = self.ignores(folder_id)
 
-        return all_files
+            for dirpath, dirnames, filenames in os.walk(folder_path):
+                rel_dir = Path(dirpath).relative_to(folder_path)
+                ignored = self._is_ignored(rel_dir, ignore_patterns)
 
-    def folder_errors(self, folder_id: str, page: int = 1, per_page: int = 0):
-        params = {"folder": folder_id}
-        if page > 0:
-            params["page"] = str(page)
-        if per_page > 0:
-            params["perpage"] = str(per_page)
-        return self._get("folder/errors", params=params)
+                total_size = 0
+                last_mod = 0
 
-    def folder_errors_all(self, folder_id: str):
-        all_errors = []
-        page = 1
-        per_page = 50
+                for f in filenames:
+                    fpath = Path(dirpath) / f
+                    try:
+                        stat = fpath.stat()
+                    except FileNotFoundError:
+                        continue
+                    total_size += stat.st_size
+                    last_mod = max(last_mod, stat.st_mtime)
 
-        while True:
-            resp = self.folder_errors(folder_id, page=page, per_page=per_page)
-            batch = resp.get("errors", [])
-            if not batch:
-                break
-            all_errors.extend(batch)
+                if total_size == 0 and not filenames:
+                    continue  # skip empty dirs
 
-            if len(batch) < per_page:
-                break
-            page += 1
+                results.append(
+                    {
+                        "folder": folder_id,
+                        "name": str(rel_dir) if rel_dir != Path(".") else ".",
+                        "size": total_size,
+                        "last_modified": last_mod,
+                        "ignored": ignored,
+                    }
+                )
 
-        return all_errors
-
-    def db_remote_need(self, folder_id: str, device_id: str, page: int = 1, per_page: int = 0):
-        params = {"folder": folder_id, "device": device_id}
-        if page > 0:
-            params["page"] = str(page)
-        if per_page > 0:
-            params["perpage"] = str(per_page)
-        return self._get("db/remoteneed", params=params)
-
-    def db_need(self, folder_id: str, page: int = 1, per_page: int = 0):
-        params = {"folder": folder_id}
-        if page > 0:
-            params["page"] = str(page)
-        if per_page > 0:
-            params["perpage"] = str(per_page)
-        return self._get("db/need", params=params)
-
-    def db_need_all(self, folder_id: str):
-        all_files = []
-        page = 1
-        per_page = 50
-
-        while True:
-            resp = self.db_need(folder_id, page=page, per_page=per_page)
-            # Combine progress + queued + rest
-            batch = resp.get("progress", []) + resp.get("queued", []) + resp.get("rest", [])
-            if not batch:
-                break
-            all_files.extend(batch)
-
-            # Stop if fewer than per_page items were returned (last page)
-            if len(batch) < per_page:
-                break
-            page += 1
-
-        return all_files
-
-    def db_remote_need_all(self, folder_id: str, device_id: str):
-        all_files = []
-        page = 1
-        per_page = 50
-
-        while True:
-            resp = self.db_remote_need(folder_id, device_id, page=page, per_page=per_page)
-            batch = resp.get("progress", []) + resp.get("queued", []) + resp.get("rest", [])
-            if not batch:
-                break
-            all_files.extend(batch)
-
-            if len(batch) < per_page:
-                break
-            page += 1
-
-        return all_files
-
-    def start_error_monitor(self, poll_interval: float = 1.0):
-        def monitor():
-            seen_errors = set()
-            while getattr(self, "_monitoring_errors", True):
-                errors = self.system_errors() or []
-                for e in errors:
-                    eid = e.get("id")
-                    if eid not in seen_errors:
-                        seen_errors.add(eid)
-                        print(f"[{self.name}] Error: {e}")
-                time.sleep(poll_interval)
-
-        self._monitoring_errors = True
-        t = threading.Thread(target=monitor, daemon=True)
-        t.start()
-        self._error_monitor_thread = t
-
-    def stop_error_monitor(self):
-        self._monitoring_errors = False
-        if hasattr(self, "_error_monitor_thread"):
-            self._error_monitor_thread.join()
-
-    def revert_folder(self, receiveonly_folder_id: str):
-        print(f"[%s] Reverting folder '%s' (receive-only)...", self.name, receiveonly_folder_id)
-        resp = self._post("db/revert", json={"folder": receiveonly_folder_id})
-        return resp
-
-    def override_folder(self, sendonly_folder_id: str):
-        print("[%s] Overriding folder '%s' (send-only)...", self.name, sendonly_folder_id)
-        resp = self._post("db/override", json={"folder": sendonly_folder_id})
-        return resp
-
-    def db_prio(self, folder_id: str, file_path: str):
-        print(f"[{self.name}] Moving file '{file_path}' to top of download queue in folder '{folder_id}'")
-        self._post(f"db/prio", params={"folder": folder_id, "file": file_path})
-
-    def db_reset(self, folder_id: str | None = None):
-        params = {}
-        if folder_id:
-            params["folder"] = folder_id
-
-        print(f"[{self.name}] Resetting {'folder '+folder_id if folder_id else 'entire database'}")
-        self._post("system/reset", params=params)
-
-    def pause(self, device_id: str | None = None):
-        params = {}
-        if device_id:
-            params["device"] = device_id
-
-        print(f"[{self.name}] Pausing {'device '+device_id if device_id else 'all devices'}")
-        self._post("system/pause", params=params)
-
-    def resume(self, device_id: str | None = None):
-        params = {}
-        if device_id:
-            params["device"] = device_id
-
-        print(f"[{self.name}] Resuming {'device '+device_id if device_id else 'all devices'}")
-        self._post("system/resume", params=params)
-
-    def db_browse(self, folder_id: str, levels: int | None = None, prefix: str | None = None):
-        params = {"folder": folder_id}
-        if levels is not None:
-            params["levels"] = str(levels)
-        if prefix is not None:
-            params["prefix"] = prefix
-
-        return self._get("db/browse", params=params)
-
-    def browse(self, current: str | None = None):
-        params = {}
-        if current is not None:
-            params["current"] = current
-        return self._get("system/browse", params=params)
+        return results
 
     def flatten_files(self, folder_id: str, prefix: str = "", levels: int | None = None):
         def _recurse(entries, path_prefix):
@@ -451,7 +373,7 @@ class Syncweb(SyncthingNode):
                     flat.extend(_recurse(e["children"], full_path))
             return flat
 
-        tree = self.db_browse(folder_id, prefix=prefix, levels=levels)
+        tree = self.files(folder_id, prefix=prefix, levels=levels)
         return _recurse(tree, prefix)
 
     def aggregate_directory(self, folder_id: str, prefix: str = "", levels: int | None = None):
@@ -472,19 +394,23 @@ class Syncweb(SyncthingNode):
         count = len(files)
         return {"total_size": total_size, "last_modified": last_modified, "count": count}
 
-    def aggregate_need(self, folder_id: str):
-        files_needed = self.db_need_all(folder_id)
-        files = [
-            {"size": f.get("size", 0), "modTime": datetime.datetime.fromisoformat(f["modTime"])} for f in files_needed
-        ]
-        return self.aggregate_files(files)
 
-    def aggregate_remote_need(self, folder_id: str, device_id: str):
-        files_needed = self.db_remote_need_all(folder_id, device_id)
-        files = [
-            {"size": f.get("size", 0), "modTime": datetime.datetime.fromisoformat(f["modTime"])} for f in files_needed
-        ]
-        return self.aggregate_files(files)
+"""
+        case "download" | "dl":
+            syncweb.mark_unignored(args)
+        case "auto-download" | "autodl":
+            syncweb.auto_mark_unignored(args)
+        case _:
+            log.error("Subcommand %s not found", args.command)
+            hash_value = abs(hash(args.command))
+            code = (hash_value % 254) + 1
+            exit(code)
+
+    magic wormhole like copy and move
+"""
+
+
+'''
 
     def aggregate_ignored(self, folder_id: str):
         ignore_resp = self._get("db/ignores", params={"folder": folder_id})
@@ -683,45 +609,27 @@ class Syncweb(SyncthingNode):
         return {"folder": folder_id, "ignored_global": sorted(ignored_global, key=lambda d: d["path"])}
 
 
-def list_files(args):
-    for path in args.paths:
-        try:
-            folder_id = args.st.folder_id(args.folder)
-        except FileNotFoundError:
-            log.error('"%s" is not inside of a Syncweb folder', quote(path))
-            continue
-
-        result = args.st("db/browse", folder=folder_id, prefix=path)
-        files = result.get("files", [])
-        dirs = result.get("directories", [])
-
-        log.info(f"Listing under '{path}' (folder: {folder_id})")
-        for d in dirs:
-            log.info(f"[dir] {d}")
-        for f in files:
-            log.info(f"      {f}")
-
 
 def mark_unignored(args):
     for path in args.paths:
         try:
-            folder_id = args.st.folder_id(args.folder)
+            folder_id = self.folder_id(args.folder)
         except FileNotFoundError:
             log.error('"%s" is not inside of a Syncweb folder', quote(path))
             continue
 
-        ignores = args.st.db_ignores(folder_id)
+        ignores = self.db_ignores(folder_id)
         new_ignores = [p for p in ignores if p not in args.paths]
 
         if new_ignores != ignores:
-            args.st.set_ignores(new_ignores)
+            self.set_ignores(new_ignores)
             log.info(f"Unignored {len(ignores) - len(new_ignores)} entries")
         else:
             log.info("No matching ignored files found.")
 
 
 def auto_mark_unignored(args):
-    result = args.st._get("db/browse", folder=args.st.folder_id, prefix="")
+    result = self._get("db/browse", folder=self.folder_id, prefix="")
     files = result.get("files", [])
 
     eligible = [
