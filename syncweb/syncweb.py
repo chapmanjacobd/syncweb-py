@@ -1,4 +1,4 @@
-import datetime, fnmatch, os, shlex
+import datetime, fnmatch, os
 from pathlib import Path
 
 import requests

@@ -1,7 +1,9 @@
 import argparse, sys
+import textwrap
 from typing import Any, Callable, Dict, List, Optional
 
 from syncweb.log_utils import log
+from syncweb.str_utils import safe_len
 
 
 class ArgparseList(argparse.Action):
@@ -14,6 +16,7 @@ class ArgparseList(argparse.Action):
             items.extend(flatten(s.split(",") for s in values))  # type: ignore
 
         setattr(namespace, self.dest, items)
+
 
 class Subcommand:
     def __init__(
@@ -102,6 +105,7 @@ class SubParser:
         global_args, rest = self.parser.parse_known_args(argv)
         log.debug("global_args: %s", global_args)
         log.debug("cmd: %s, rest: %s", rest[0], rest[1:])
+
         # merge global args into subcommand parser
         for action in self.parser._actions:
             if action.option_strings:
@@ -113,6 +117,24 @@ class SubParser:
         for k, v in vars(global_args).items():
             if getattr(args, k, None) is None:
                 setattr(args, k, v)
+
+        parser_defaults = SubParser.get_argparse_defaults(self.parser)
+        args.defaults = {k: v for k, v in args.__dict__.items() if parser_defaults.get(k, None) == v}
+        settings = {
+            k: v for k, v in args.__dict__.items() if k not in ["verbose", "defaults", *list(args.defaults.keys())]
+        }
+        if args:
+            max_v = 140
+            log.debug(
+                {
+                    k: (
+                        v
+                        if len(str(v)) < max_v
+                        else textwrap.shorten(str(v), max_v, placeholder=f"[{safe_len(v)} items]")
+                    )
+                    for k, v in settings.items()
+                }
+            )
 
         if not cmd.func:
             self.error(f"Command '{cmd.name}' has no handler.")
@@ -136,3 +158,14 @@ class SubParser:
         sys.stderr.write(f"error: {msg}\n")
         self.print_help()
         sys.exit(2)
+
+    @staticmethod
+    def get_argparse_defaults(parser):
+        defaults = {}
+        for action in parser._actions:
+            if not action.required and action.default is not None and action.dest != "help":
+                default = action.default
+                if action.type is not None:
+                    default = action.type(default)
+                defaults[action.dest] = default
+        return defaults

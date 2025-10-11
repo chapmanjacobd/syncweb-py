@@ -1,17 +1,13 @@
-from datetime import timedelta
-import datetime
 from pathlib import Path
-import posixpath
 import shlex
-import sys
+from syncweb import log_utils
 from syncweb.log_utils import log
-from syncweb import consts, str_utils
-from syncweb.ls import folder_size, is_directory, path2fid
-from syncweb.str_utils import format_time, human_to_bytes, human_to_seconds, parse_human_to_lambda
+from syncweb import consts
+from syncweb.ls import is_directory
+from syncweb.str_utils import human_to_bytes, human_to_seconds, parse_human_to_lambda, pipe_print
 import os
 import re
-import fnmatch
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List
 import shlex
 from pathlib import Path
 
@@ -37,24 +33,23 @@ def parse_depth_constraints(depth_list: List[str], min_depth=0, max_depth=None) 
     return min_depth, max_depth
 
 
-def matches_pattern(name: str, patterns: List[str], ignore_case: bool) -> bool:
-    if not patterns or patterns == ['.*']:
+def matches_pattern(name: str, pattern: str, ignore_case: bool) -> bool:
+    if pattern == '.*':
         return True
 
     flags = re.IGNORECASE if ignore_case else 0
 
-    for pattern in patterns:
-        try:
-            if re.search(pattern, name, flags):
+    try:
+        if re.search(pattern, name, flags):
+            return True
+    except re.error:
+        # If pattern is invalid regex, try literal match
+        if ignore_case:
+            if pattern.lower() in name.lower():
                 return True
-        except re.error:
-            # If pattern is invalid regex, try literal match
-            if ignore_case:
-                if pattern.lower() in name.lower():
-                    return True
-            else:
-                if pattern in name:
-                    return True
+        else:
+            if pattern in name:
+                return True
 
     return False
 
@@ -87,7 +82,7 @@ def matches_constraints(args, item: dict, current_depth: int) -> bool:
         if not args.time_modified(consts.APPLICATION_START - mod_time):
             return False
 
-    if not matches_pattern(name, args.patterns, args.ignore_case):
+    if not matches_pattern(name, args.pattern, args.ignore_case):
         return False
 
     return True
@@ -101,11 +96,15 @@ def find_files(args, items=None, current_path: str | None = "", current_depth: i
         name = item.get('name', '')
         item_path = f"{current_path}/{name}" if current_path else name
 
+        is_dir = is_directory(item)
         if matches_constraints(args, item, current_depth):
-            yield item_path
+            if is_dir and log_utils.is_terminal:
+                yield f"{item_path}/"
+            else:
+                yield item_path
 
         if (
-            is_directory(item)
+            is_dir
             and 'children' in item
             and item['children']
             and (args.max_depth is None or current_depth < args.max_depth)
@@ -142,19 +141,6 @@ def path2fid_allow_outside(args, abs_path):
 
 
 def cmd_find(args) -> None:
-    if "/" in args.patterns[0]:
-        log.warning(
-            """The search pattern '%s' contains a path-separation character ('/') and will not lead to any search results.
-
-If you want to search for all files inside the '%s' directory, use a match-all pattern:
-
-  syncweb fd . '%s'
-""",
-            args.patterns[0],
-            args.patterns[0],
-            args.patterns[0],
-        )
-
     args.min_depth, args.max_depth = parse_depth_constraints(args.depth, args.min_depth, args.max_depth)
 
     if args.sizes:
@@ -169,9 +155,12 @@ If you want to search for all files inside the '%s' directory, use a match-all p
         args.ignore_case = False
     elif not args.ignore_case:
         # Default behavior: case-insensitive for lowercase patterns
-        args.ignore_case = all(p.islower() for p in args.patterns if p != '.*')
+        if re.search('[A-Za-z]', args.pattern):
+            args.ignore_case = args.pattern.islower()
+        else:
+            args.ignore_case = True
 
-    for path in args.root_paths:
+    for path in args.search_paths or ["."]:
         abs_path = Path(path).resolve()
         folder_id, prefix, user_prefix = path2fid_allow_outside(args, abs_path)
         if folder_id is None:
@@ -179,14 +168,14 @@ If you want to search for all files inside the '%s' directory, use a match-all p
             continue
 
         data = args.st.files(folder_id, levels=args.max_depth, prefix=prefix)
-        log.debug("files: %s data", len(data))
+        log.debug("files: %s top-level data", len(data))
 
         # TODO: or should it be PurePosixPath?
         if user_prefix:
             prefix = os.path.join(user_prefix, prefix) if prefix else user_prefix
 
         for path in find_files(args, data, prefix, (prefix.count("/") + 0) if prefix else 0):
-            print(path)
+            pipe_print(path)
 
 
 """
@@ -368,7 +357,7 @@ def search_item(patterns: List[str], item: Dict[str, Any], base_path: str, curre
 
 def cmd_find(
     patterns: List[str],
-    root_paths: List[str],
+    search_paths: List[str],
     syncthing_client,
     case_sensitive: bool = False,
     hidden: bool = False,
@@ -413,7 +402,7 @@ def cmd_find(
             except Exception as e:
                 print(f"Error parsing time filter '--modified-before {time_str}': {e}", file=sys.stderr)
 
-    for root_path in root_paths:
+    for root_path in search_paths:
         yield from search_in_path(patterns, root_path, case_sensitive, syncthing_client)
 
 
@@ -453,23 +442,6 @@ def print_directory(args, items, current_level: int = 1, indent: int = 0) -> Non
             print_directory(args, item["children"], current_level + 1, indent + 1)
             if indent == 0:
                 print()
-
-def print_entry(item: dict, long: bool = False, human_readable: bool = False) -> None:
-    name = item.get("name", "")
-
-    is_dir = is_directory(item)
-    # Add visual indicator for directories
-    display_name = f"{name}/" if is_dir else name
-
-    if long:
-        type_char = "d" if is_dir else "-"
-        size = folder_size(item) if is_dir else item.get("size", 0)
-        size_str = str_utils.file_size(size) if human_readable else str(size)
-        time_str = format_time(item.get("modTime", ""), long)
-
-        print(f"{type_char:<4} {size_str:>10}  {time_str:>12}  {display_name}")
-    else:
-        print(display_name)
 
 
 """

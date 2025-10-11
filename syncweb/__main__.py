@@ -230,8 +230,8 @@ def cli():
     --time-modified='-3 days' (newer than)
     --time-modified='+3 days' (older than)""",
     )
-    find.add_argument('patterns', nargs='*', default=['.*'], help='Search patterns (default: all files)')
-    find.add_argument('root_paths', nargs='*', default=['.'], help='Root directories to search')
+    find.add_argument('pattern', nargs='?', default='.*', help='Search patterns (default: all files)')
+    find.add_argument('search_paths', nargs='*', help='Root directories to search')
 
     download = subparsers.add_parser("download", aliases=["dl"], help="Mark files as unignored for download")
     download.add_argument("paths", nargs="+", help="Paths or globs of files to unignore")

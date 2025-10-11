@@ -17,32 +17,40 @@ def path2fid(args, abs_path):
 
     return None, None
 
-def cmd_ls(args):
-    header_printed = not(args.long and not args.no_header)
+def is_directory(item: dict) -> bool:
+    return item.get("type") == "FILE_INFO_TYPE_DIRECTORY"
 
-    def print_header():
-        nonlocal header_printed
+def folder_size(item: dict) -> int:
+    if not is_directory(item) or "children" not in item:
+        return item.get("size", 0)
 
-        HEADER_FORMAT = "{:<4} {:>10}  {:>12}  {}"
-        HEADER_LINE = HEADER_FORMAT.format('Type', 'Size', 'Modified', 'Name')
-        print(HEADER_LINE)
-        print("-" * len(HEADER_LINE))
-        header_printed = True
+    total = 0
+    for child in item["children"]:
+        total += folder_size(child)
+    return total
 
-    for path in args.paths:
-        abs_path = Path(path).resolve()
-        folder_id, prefix = path2fid(args, abs_path)
-        if folder_id is None:
-            log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
-            continue
+def print_entry(item: dict, long: bool = False, human_readable: bool = False) -> None:
+    name = item.get("name", "")
 
-        levels = None if args.recursive else args.depth
-        data = args.st.files(folder_id, levels=levels, prefix=prefix)
-        log.debug("files: %s data", len(data))
+    is_dir = is_directory(item)
+    # Add visual indicator for directories
+    display_name = f"{name}/" if is_dir else name
 
-        if data and not header_printed:
-            print_header()
-        print_directory(args, data)
+    if long:
+        type_char = "d" if is_dir else "-"
+        size = folder_size(item) if is_dir else item.get("size", 0)
+        size_str = str_utils.file_size(size) if human_readable else str(size)
+        time_str = format_time(item.get("modTime", ""), long)
+
+        print(f"{type_char:<4} {size_str:>10}  {time_str:>12}  {display_name}")
+    else:
+        print(display_name)
+
+def calculate_depth(item: dict) -> int:
+    if not is_directory(item) or "children" not in item or not item["children"]:
+        return 0
+
+    return 1 + max(calculate_depth(child) for child in item["children"])
 
 def print_directory(args, items, current_level: int = 1, indent: int = 0) -> None:
     sorted_items = sorted(
@@ -76,37 +84,29 @@ def print_directory(args, items, current_level: int = 1, indent: int = 0) -> Non
             if indent == 0:
                 print()
 
-def print_entry(item: dict, long: bool = False, human_readable: bool = False) -> None:
-    name = item.get("name", "")
+def cmd_ls(args):
+    header_printed = not(args.long and not args.no_header)
 
-    is_dir = is_directory(item)
-    # Add visual indicator for directories
-    display_name = f"{name}/" if is_dir else name
+    def print_header():
+        nonlocal header_printed
 
-    if long:
-        type_char = "d" if is_dir else "-"
-        size = folder_size(item) if is_dir else item.get("size", 0)
-        size_str = str_utils.file_size(size) if human_readable else str(size)
-        time_str = format_time(item.get("modTime", ""), long)
+        HEADER_FORMAT = "{:<4} {:>10}  {:>12}  {}"
+        HEADER_LINE = HEADER_FORMAT.format('Type', 'Size', 'Modified', 'Name')
+        print(HEADER_LINE)
+        print("-" * len(HEADER_LINE))
+        header_printed = True
 
-        print(f"{type_char:<4} {size_str:>10}  {time_str:>12}  {display_name}")
-    else:
-        print(display_name)
+    for path in args.paths:
+        abs_path = Path(path).resolve()
+        folder_id, prefix = path2fid(args, abs_path)
+        if folder_id is None:
+            log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
+            continue
 
-def folder_size(item: dict) -> int:
-    if not is_directory(item) or "children" not in item:
-        return item.get("size", 0)
+        levels = None if args.recursive else args.depth
+        data = args.st.files(folder_id, levels=levels, prefix=prefix)
+        log.debug("files: %s top-level data", len(data))
 
-    total = 0
-    for child in item["children"]:
-        total += folder_size(child)
-    return total
-
-def calculate_depth(item: dict) -> int:
-    if not is_directory(item) or "children" not in item or not item["children"]:
-        return 0
-
-    return 1 + max(calculate_depth(child) for child in item["children"])
-
-def is_directory(item: dict) -> bool:
-    return item.get("type") == "FILE_INFO_TYPE_DIRECTORY"
+        if data and not header_printed:
+            print_header()
+        print_directory(args, data)

@@ -3,7 +3,6 @@ import argparse, logging, os, sys
 from IPython.core import ultratb
 from IPython.terminal import debugger
 
-
 def check_stdio():
     try:
         has_stdin = os.getpgrp() == os.tcgetpgrp(sys.stdin.fileno())
@@ -12,6 +11,8 @@ def check_stdio():
         has_stdin, has_stdout = False, False
     return has_stdin, has_stdout
 
+has_stdin, has_stdout = check_stdio()
+is_terminal = has_stdin and has_stdout
 
 def format_args(pargs, kwargs):
     args_str = ", ".join(repr(arg) for arg in pargs)
@@ -36,8 +37,6 @@ def argparse_log() -> logging.Logger:
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument("--no-pdb", action="store_true")
     args, _unknown = parser.parse_known_args()
-
-    has_stdin, has_stdout = check_stdio()
 
     if args.verbose > 0 and has_stdin and has_stdout:
         sys.breakpointhook = debugger.set_trace
