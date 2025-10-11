@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from library.utils import processes
+from syncweb.cmd_utils import cmd
 
 import tests.db as db
 import tests.fstree as fstree
@@ -37,7 +37,7 @@ def test_w_r_move():
         fstree.write(source_fstree, w.local / cluster.folder_id)
         fstree.check(source_fstree, r.local / cluster.folder_id)
 
-        processes.cmd(
+        cmd(
             "syncthing_send.py",
             "--interval=1",
             "--timeout=30s",

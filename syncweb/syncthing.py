@@ -3,9 +3,9 @@ from functools import cached_property
 from pathlib import Path
 
 import requests
-from library.utils import processes
-from library.utils.log_utils import log
+from syncweb.log_utils import log
 
+from syncweb.cmd_utils import Pclose, cmd
 from syncweb.config import ConfigXML
 
 ROLE_TO_TYPE = {
@@ -31,7 +31,7 @@ class SyncthingNodeXML:
         self.config_path = self.home_path / "config.xml"
 
         if not self.config_path.exists():
-            processes.cmd(self.bin, f"--home={self.home_path}", "generate")
+            cmd(self.bin, f"--home={self.home_path}", "generate")
 
         self.config = ConfigXML(self.config_path)
         self.xml_set_default_config()
@@ -304,7 +304,7 @@ class SyncthingNodeXML:
         self.running = False
 
     def log(self):
-        r = processes.Pclose(self.process)
+        r = Pclose(self.process)
 
         if r.returncode != 0:
             print(self.name, "exited", r.returncode)
@@ -482,19 +482,6 @@ class SyncthingNode(SyncthingNodeXML):
         if device_id:  # when omitted resumes all devices
             params["device"] = device_id
         return self._post("system/resume", params=params)
-
-    def path2folder_id(self, absolute_path):
-        abs_path = Path(absolute_path)
-
-        for folder in self.folders() or []:
-            folder_path = Path(folder["path"]).resolve()
-            try:
-                prefix = abs_path.relative_to(folder_path)
-                return folder["id"], str(prefix) if prefix and str(prefix) != "." else None
-            except ValueError:
-                continue
-
-        raise FileNotFoundError
 
     def folder_status(self, folder_id: str):
         return self._get("db/status", params={"folder": folder_id})

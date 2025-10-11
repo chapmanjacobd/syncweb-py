@@ -3,11 +3,11 @@
 import argparse, os, sys
 from pathlib import Path
 
-from library.utils import argparse_utils
-
 from syncweb import cmd_utils
-from syncweb.cli import SubParser
+from syncweb.cli import ArgparseList, SubParser
+from syncweb.find import cmd_find
 from syncweb.log_utils import log
+from syncweb.ls import cmd_ls
 from syncweb.syncweb import Syncweb
 
 __version__ = "0.0.1"
@@ -28,6 +28,24 @@ def cmd_shutdown(args):
     args.st.shutdown()
 
 
+def cmd_pause(args):
+    if args.all:
+        added = args.st.cmd_pause()
+        print("Paused all devices")
+    else:
+        added = args.st.cmd_pause(args.device_ids)
+        print("Paused", added, "device" if added == 1 else "devices")
+
+
+def cmd_resume(args):
+    if args.all:
+        added = args.st.cmd_resume()
+        print("Resumed all devices")
+    else:
+        added = args.st.cmd_resume(args.device_ids)
+        print("Resumed", added, "device" if added == 1 else "devices")
+
+
 def cmd_accept(args):
     added = args.st.cmd_accept(args.device_ids)
     print("Added", added, "device" if added == 1 else "devices")
@@ -42,10 +60,6 @@ def cmd_add(args):
     added_devices, added_folders = args.st.cmd_add(args.urls)
     print("Added", added_devices, "device" if added_devices == 1 else "devices")
     print("Added", added_folders, "folder" if added_folders == 1 else "folders")
-
-
-def cmd_ls(args):
-    args.st.cmd_ls(args)
 
 
 def cli():
@@ -67,7 +81,7 @@ def cli():
         "--extensions",
         "-e",
         default=[],
-        action=argparse_utils.ArgparseList,
+        action=ArgparseList,
         help="Include only specific file extensions",
     )
     parser.add_argument(
@@ -98,7 +112,7 @@ def cli():
     devices.add_argument(
         "device_ids",
         nargs="+",
-        action=argparse_utils.ArgparseList,
+        action=ArgparseList,
         help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
@@ -108,7 +122,7 @@ def cli():
     syncweb_urls.add_argument(
         "urls",
         nargs="+",
-        action=argparse_utils.ArgparseList,
+        action=ArgparseList,
         help="""URL format
 
         Add a device and folder
@@ -119,8 +133,24 @@ def cli():
 """,
     )
 
+    pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
+    pause.add_argument("--all", "-a", action="store_true", help="All devices")
+    pause.add_argument(
+        "device_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
+    )
+    resume = subparsers.add_parser("resume", help="Resume data transfer to a device in your syncweb", func=cmd_resume)
+    resume.add_argument("--all", "-a", action="store_true", help="All devices")
+    resume.add_argument(
+        "device_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
+    )
+
     ls = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level", func=cmd_ls)
-    ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
     ls.add_argument("--long", "-l", action="store_true", help="use long listing format")
     ls.add_argument(
         "--human-readable",
@@ -129,12 +159,79 @@ def cli():
         help="print sizes in human readable format",
     )
     ls.add_argument("--show-all", "--all", "-a", action="store_true", help="do not ignore entries starting with .")
-    ls.add_argument("--depth", "-D", "--levels", type=int, default=0, metavar="N", help="descend N directory levels deep")
+    ls.add_argument(
+        "--depth", "-D", "--levels", type=int, default=0, metavar="N", help="descend N directory levels deep"
+    )
     ls.add_argument("--recursive", "-R", action="store_true", help="list subdirectories recursively")
     ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
+    ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
 
     subparsers.add_parser("cd", help="Change directory helper")
     # TODO: add autocomplete via local metadata
+
+    find = subparsers.add_parser(
+        "find", aliases=["fd", "search"], help="Search for files by filename, size, and modified date", func=cmd_find
+    )
+    find.add_argument('--ignore-case', '-i', action='store_true', help='Case insensitive search')
+    find.add_argument('--case-sensitive', '-s', action='store_true', help='Case sensitive search')
+    find.add_argument('--hidden', '-H', action='store_true', help='Search hidden files and directories')
+    find.add_argument('--type', '-t', choices=['f', 'd'], help='Filter by type: f=file, d=directory')
+    find.add_argument('--follow-links', '-L', action='store_true', help='Follow symbolic links')
+    find.add_argument('--absolute-path', '-a', action='store_true', help='Print absolute paths')
+    find.add_argument(
+        "--depth",
+        "-d",
+        "--levels",
+        action='append',
+        default=["+0"],
+        metavar="N",
+        help="""Constrain files by file depth
+-d 2         # Show only items at depth 2
+-d=+2        # Show items at depth 2 and deeper (min_depth=2)
+-d=-2        # Show items up to depth 2 (max_depth=2)
+-d=+1 -d=-3  # Show items from depth 1 to 3
+""",
+    )
+    find.add_argument("--min-depth", type=int, default=0, metavar="N", help="Alternative depth notation")
+    find.add_argument("--max-depth", type=int, default=None, metavar="N", help="Alternative depth notation")
+    find.add_argument(
+        "--sizes",
+        "--size",
+        "-S",
+        action="append",
+        help="""Constrain files by file size (uses the same syntax as fd-find)
+-S 6           # 6 MB exactly (not likely)
+-S-6           # less than 6 MB
+-S+6           # more than 6 MB
+-S 6%%10       # 6 MB ±10 percent (between 5 and 7 MB)
+-S+5GB -S-7GB  # between 5 and 7 GB""",
+    )
+    find.add_argument(
+        "--modified-within",
+        "--changed-within",
+        action="append",
+        default=[],
+        help="""Constrain files by time_modified (newer than)
+--modified-within '3 days'""",
+    )
+    find.add_argument(
+        "--modified-before",
+        "--changed-before",
+        action="append",
+        default=[],
+        help="""Constrain files by time_modified (older than)
+--modified-before '3 years'""",
+    )
+    find.add_argument(
+            "--time-modified",
+            action="append",
+            default=[],
+            help="""Constrain media by time_modified (alternative syntax)
+    --time-modified='-3 days' (newer than)
+    --time-modified='+3 days' (older than)""",
+    )
+    find.add_argument('patterns', nargs='*', default=['.*'], help='Search patterns (default: all files)')
+    find.add_argument('root_paths', nargs='*', default=['.'], help='Root directories to search')
 
     download = subparsers.add_parser("download", aliases=["dl"], help="Mark files as unignored for download")
     download.add_argument("paths", nargs="+", help="Paths or globs of files to unignore")

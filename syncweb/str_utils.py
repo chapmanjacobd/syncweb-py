@@ -2,19 +2,15 @@ import base64, datetime, hashlib, os, re
 from contextlib import suppress
 from datetime import timezone as tz
 from pathlib import Path
+import sys
 from typing import NamedTuple
 from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 
 import humanize
 from idna import decode as puny_decode
 
+from syncweb.consts import FolderRef
 from syncweb.log_utils import log
-
-
-class FolderRef(NamedTuple):
-    folder_id: str | None
-    subpath: str | None
-    device_id: str | None
 
 
 def extract_device_id(value: str) -> str:
@@ -252,3 +248,102 @@ def relative_datetime(seconds) -> str:
             return dt.strftime(f"{delta.days} days ago, %H:%M")
 
     return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def format_time(mod_time: str, long_format: bool = False) -> str:
+    if not long_format:
+        return ""
+
+    try:
+        dt = datetime.datetime.fromisoformat(mod_time.replace("Z", "+00:00"))
+        return dt.strftime("%b %d %H:%M")
+    except (ValueError, AttributeError):
+        return mod_time[:16] if mod_time else ""
+
+
+def human_to_seconds(input_str):
+    if input_str is None:
+        return None
+
+    time_units = {
+        "s": 1,
+        "sec": 1,
+        "second": 1,
+        "m": 60,
+        "min": 60,
+        "minute": 60,
+        "h": 3600,
+        "hr": 3600,
+        "hour": 3600,
+        "d": 86400,
+        "day": 86400,
+        "w": 604800,
+        "week": 604800,
+        "mo": 2592000,
+        "mon": 2592000,
+        "month": 2592000,
+        "y": 31536000,
+        "yr": 31536000,
+        "year": 31536000,
+    }
+
+    input_str = input_str.strip().lower()
+
+    value = re.findall(r"\d+\.?\d*", input_str)[0]
+    unit = re.findall(r"[a-z]+", input_str, re.IGNORECASE)
+
+    if unit:
+        unit = unit[0]
+        if unit != "s":
+            unit = unit.rstrip("s")
+    else:
+        unit = "m"
+
+    return int(float(value) * time_units[unit])
+
+
+def human_to_bytes(input_str, binary=True) -> int:
+    k = 1024 if binary else 1000
+    byte_map = {"b": 1, "k": k, "m": k**2, "g": k**3, "t": k**4, "p": k**5}
+
+    input_str = input_str.strip().lower()
+
+    value = re.findall(r"\d+\.?\d*", input_str)[0]
+    unit = re.findall(r"[a-z]+", input_str, re.IGNORECASE)
+
+    unit = unit[0][0] if unit else "m"
+
+    unit_multiplier = byte_map.get(unit, k**2)  # default to MB / MBit
+    return int(float(value) * unit_multiplier)
+
+
+def parse_human_to_lambda(human_to_x, sizes):
+    if not sizes:
+        return lambda _var: True
+
+    def check_all_sizes(var):
+        return all(human_to_lambda_part(var, human_to_x, size) for size in sizes)
+
+    return check_all_sizes
+
+def human_to_lambda_part(var, human_to_x, size):
+    if var is None:
+        var = 0
+
+    if size.startswith(">"):
+        return var > human_to_x(size.lstrip(">"))
+    elif size.startswith("<"):
+        return var < human_to_x(size.lstrip("<"))
+    elif size.startswith("+"):
+        return var > human_to_x(size.lstrip("+"))
+    elif size.startswith("-"):
+        return human_to_x(size.lstrip("-")) >= var
+    elif "%" in size:
+        size, percent = size.split("%")
+        size = human_to_x(size)
+        percent = float(percent)
+        lower_bound = int(size - (size * (percent / 100)))
+        upper_bound = int(size + (size * (percent / 100)))
+        return lower_bound <= var and var <= upper_bound
+    else:
+        return var == human_to_x(size)

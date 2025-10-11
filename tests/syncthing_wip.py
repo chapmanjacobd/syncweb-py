@@ -1,9 +1,9 @@
-from library.utils import processes
+from syncweb.cmd_utils import cmd
 
 import tests.fstree as fstree
 from syncweb.syncthing import SyncthingCluster
 
-processes.cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
+cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
 
 
 def test_globalignore():

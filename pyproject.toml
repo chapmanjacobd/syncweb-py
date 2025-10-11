@@ -1,6 +1,6 @@
 [project]
 name = "syncweb"
-dependencies = ["argcomplete>=3.6.2", "library>=3.0.127", "idna>=3.10", "humanize>=4.13.0"]
+dependencies = ["argcomplete>=3.6.2", "idna>=3.10", "humanize>=4.13.0"]
 description = "Syncweb: an offline-first distributed web"
 dynamic = ["version"]
 license = {file = "LICENSE"}

@@ -4,6 +4,17 @@ from typing import Any, Callable, Dict, List, Optional
 from syncweb.log_utils import log
 
 
+class ArgparseList(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        items = getattr(namespace, self.dest, None) or []
+
+        if isinstance(values, str):
+            items.extend(values.split(","))  # type: ignore
+        else:
+            items.extend(flatten(s.split(",") for s in values))  # type: ignore
+
+        setattr(namespace, self.dest, items)
+
 class Subcommand:
     def __init__(
         self,

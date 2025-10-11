@@ -30,6 +30,36 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
+    def cmd_pause(self, device_ids=None):
+        if device_ids is None:
+            return self.pause()
+
+        device_count = 0
+        for path in device_ids:
+            try:
+                device_id = str_utils.extract_device_id(path)
+                self.pause(device_id)
+                device_count += 1
+            except ValueError:
+                log.error("Invalid Device ID %s", path)
+
+        return device_count
+
+    def cmd_resume(self, device_ids=None):
+        if device_ids is None:
+            return self.resume()
+
+        device_count = 0
+        for path in device_ids:
+            try:
+                device_id = str_utils.extract_device_id(path)
+                self.resume(device_id)
+                device_count += 1
+            except ValueError:
+                log.error("Invalid Device ID %s", path)
+
+        return device_count
+
     def cmd_add(self, urls, decode=True):
         device_count, folder_count = 0, 0
         for url in urls:
@@ -136,115 +166,6 @@ class Syncweb(SyncthingNode):
             }
             self._put(f"config/devices/{dev_id}", json=cfg)
 
-    def cmd_ls(self, args):
-        header_printed = not(args.long and not args.no_header)
-
-        def print_header():
-            nonlocal header_printed
-
-            HEADER_FORMAT = "{:<4} {:>10}  {:>12}  {}"
-            HEADER_LINE = HEADER_FORMAT.format('Type', 'Size', 'Modified', 'Name')
-            print(HEADER_LINE)
-            print("-" * len(HEADER_LINE))
-            header_printed = True
-
-        for path in args.paths:
-            abs_path = Path(path).resolve()
-            try:
-                folder_id, prefix = self.path2folder_id(abs_path)
-            except FileNotFoundError:
-                log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
-                continue
-
-            levels = None if args.recursive else args.depth
-            data = self.files(folder_id, levels=levels, prefix=prefix)
-            log.debug("self.files: %s data", len(data))
-
-            if data and not header_printed:
-                print_header()
-            self.print_directory(args, data)
-
-    def print_directory(self, args, items, current_level: int = 1, indent: int = 0) -> None:
-        sorted_items = sorted(
-            items,
-            key=lambda x: (
-                -Syncweb.calculate_depth(x),
-                not Syncweb.is_directory(x),
-                x.get("name", "").lower(),
-            ),
-        )
-
-        for item in sorted_items:
-            name = item.get("name", "")
-
-            # skip hidden files unless show_all is True
-            if not args.show_all and name.startswith("."):
-                continue
-
-            # print indentation when recursive listing
-            if indent > 0:
-                prefix = "  " * indent
-                print(prefix, end="")
-
-            self.print_entry(item, args.long, args.human_readable)
-
-            should_recurse = Syncweb.is_directory(item) and "children" in item and (current_level < args.depth)
-            if should_recurse:
-                if indent == 0:
-                    print(f"\n\x1b[4m{name}\x1b[0m:")
-                self.print_directory(args, item["children"], current_level + 1, indent + 1)
-                if indent == 0:
-                    print()
-
-    def print_entry(self, item: dict, long: bool = False, human_readable: bool = False) -> None:
-        name = item.get("name", "")
-
-        is_dir = Syncweb.is_directory(item)
-        # Add visual indicator for directories
-        display_name = f"{name}/" if is_dir else name
-
-        if long:
-            type_char = "d" if is_dir else "-"
-            size = Syncweb.folder_size(item) if is_dir else item.get("size", 0)
-            size_str = str_utils.file_size(size) if human_readable else str(size)
-            time_str = self.format_time(item.get("modTime", ""), long)
-
-            print(f"{type_char:<4} {size_str:>10}  {time_str:>12}  {display_name}")
-        else:
-            print(display_name)
-
-    @staticmethod
-    def folder_size(item: dict) -> int:
-        if not Syncweb.is_directory(item) or "children" not in item:
-            return item.get("size", 0)
-
-        total = 0
-        for child in item["children"]:
-            total += Syncweb.folder_size(child)
-        return total
-
-    @staticmethod
-    def calculate_depth(item: dict) -> int:
-        if not Syncweb.is_directory(item) or "children" not in item or not item["children"]:
-            return 0
-
-        return 1 + max(Syncweb.calculate_depth(child) for child in item["children"])
-
-    @staticmethod
-    def is_directory(item: dict) -> bool:
-        return item.get("type") == "FILE_INFO_TYPE_DIRECTORY"
-
-    @staticmethod
-    def format_time(mod_time: str, long_format: bool = False) -> str:
-        if not long_format:
-            return ""
-
-        try:
-            dt = datetime.datetime.fromisoformat(mod_time.replace("Z", "+00:00"))
-            return dt.strftime("%b %d %H:%M")
-        except (ValueError, AttributeError):
-            return mod_time[:16] if mod_time else ""
-
     def accept_pending_folders(self, folder_id: str | None = None):
         pending = self._get("cluster/pending/folders")
         if not pending:
@@ -314,7 +235,7 @@ class Syncweb(SyncthingNode):
 
             ignore_patterns = self.ignores(folder_id)
 
-            for dirpath, dirnames, filenames in os.walk(folder_path):
+            for dirpath, _dirnames, filenames in os.walk(folder_path):
                 rel_dir = Path(dirpath).relative_to(folder_path)
                 ignored = self._is_ignored(rel_dir, ignore_patterns)
 
@@ -379,22 +300,6 @@ class Syncweb(SyncthingNode):
         last_modified = max(f["modTime"] for f in files)
         count = len(files)
         return {"total_size": total_size, "last_modified": last_modified, "count": count}
-
-
-"""
-        case "download" | "dl":
-            syncweb.mark_unignored(args)
-        case "auto-download" | "autodl":
-            syncweb.auto_mark_unignored(args)
-        case _:
-            log.error("Subcommand %s not found", args.command)
-            hash_value = abs(hash(args.command))
-            code = (hash_value % 254) + 1
-            exit(code)
-
-    magic wormhole like copy and move
-"""
-
 
 '''
 
