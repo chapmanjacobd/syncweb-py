@@ -2,13 +2,13 @@
 import datetime, random, shlex
 from pathlib import Path
 
+from syncweb import str_utils
 from syncweb.cmds.ls import path2fid
+from syncweb.consts import APPLICATION_START
 from syncweb.log_utils import log
 from syncweb.str_utils import pipe_print
 
 # TODO: add support for sorting folders; aggregate (folder-size, median modTime, etc)
-
-now = datetime.datetime.now(datetime.timezone.utc)
 
 
 def make_sort_key(sort_modes):
@@ -20,8 +20,8 @@ def make_sort_key(sort_modes):
         size = metadata["size"]
 
         iso_str = metadata["modified"]
-        mod_time = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        days = (now - mod_time).total_seconds() / 86400.0
+        mod_time = str_utils.isodate2seconds(iso_str)
+        days = (APPLICATION_START - mod_time) / 86400.0
 
         key = []
         for mode in sort_modes:

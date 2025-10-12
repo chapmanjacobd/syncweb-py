@@ -45,7 +45,8 @@ class Subcommand:
         self.help = help
         self.aliases = aliases or []
         self.func = func
-        self._parser = argparse.ArgumentParser(prog=name, description=help, add_help=True)
+        # Set add_help=False to handle help manually
+        self._parser = argparse.ArgumentParser(prog=name, description=help, add_help=False)
 
     @property
     def all_names(self) -> List[str]:
@@ -56,6 +57,10 @@ class Subcommand:
 
     def set_defaults(self, **kwargs):
         self._parser.set_defaults(**kwargs)
+
+    def print_help(self):
+        """Print help for this subcommand"""
+        self._parser.print_help()
 
 
 class SubParser:
@@ -113,8 +118,16 @@ class SubParser:
         cmd = self.subcommands.get(cmd_name)
         if not cmd:
             self.error(f"Unknown command: '{cmd_name}'")
-        # global_argv = argv[:cmd_index]
-        # subcmd_argv = argv[cmd_index + 1:]
+
+        # Check if help is requested for this subcommand
+        if any(arg in ("-h", "--help") for arg in argv[cmd_index + 1:]):
+            # merge global args into subcommand parser for help display
+            for action in self.parser._actions:
+                if action.option_strings and action.dest != "help":
+                    cmd._parser._add_action(action)
+            cmd._parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
+            cmd.print_help()
+            sys.exit(0)
 
         log.debug("argv: %s", argv)
         global_args, rest = self.parser.parse_known_args(argv)
@@ -123,9 +136,7 @@ class SubParser:
 
         # merge global args into subcommand parser
         for action in self.parser._actions:
-            if action.option_strings:
-                if any(opt in ("-h", "--help") for opt in action.option_strings):
-                    continue
+            if action.option_strings and action.dest != "help":
                 cmd._parser._add_action(action)
         # parse command args
         args = cmd._parser.parse_args(rest[1:])

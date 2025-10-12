@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 import humanize
 from idna import decode as puny_decode
 
+from syncweb import consts
 from syncweb.consts import FolderRef
 from syncweb.log_utils import log
 
@@ -216,6 +217,36 @@ def safe_float(s) -> float | None:
     except Exception:
         return None
 
+def isodate2seconds(isodate):
+    return int(datetime.datetime.fromisoformat(isodate.replace("Z", "+00:00")).timestamp())
+
+def duration_short(seconds, format_str="%0.1f") -> str:
+    seconds = safe_int(seconds)
+    if not seconds:
+        return ""
+
+    try:
+        if seconds < 60:
+            return f"{int(seconds)} seconds"
+
+        minutes = seconds / 60
+        if minutes < 1.1:
+            return "1 minute"
+        elif minutes < 60:
+            return f"{format_str % minutes} minutes"
+
+        hours = minutes / 60
+        if hours < 1.1:
+            return "1 hour"
+        elif hours < 24:
+            return f"{format_str % hours} hours"
+
+        days = hours / 24
+        if days < 1.1:
+            return "1 day"
+        return f"{format_str % days} days"
+    except OverflowError:
+        return ""
 
 def relative_datetime(seconds) -> str:
     seconds = safe_float(seconds)

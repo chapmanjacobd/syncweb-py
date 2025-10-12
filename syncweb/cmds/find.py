@@ -5,7 +5,7 @@ from typing import List
 from syncweb import consts, log_utils
 from syncweb.cmds.ls import folder_size, is_directory
 from syncweb.log_utils import log
-from syncweb.str_utils import human_to_bytes, human_to_seconds, parse_human_to_lambda, pipe_print
+from syncweb.str_utils import human_to_bytes, human_to_seconds, isodate2seconds, parse_human_to_lambda, pipe_print
 
 # TODO:
 # add --full-path filtering
@@ -102,8 +102,7 @@ def matches_constraints(args, item: dict, current_depth: int) -> bool:
             return False
 
     if args.time_modified:
-        mod_time = item.get("modTime", "")
-        mod_time = int(datetime.datetime.fromisoformat(mod_time.replace("Z", "+00:00")).timestamp())
+        mod_time = isodate2seconds(item["modTime"])
         if not args.time_modified(consts.APPLICATION_START - mod_time):
             return False
 
