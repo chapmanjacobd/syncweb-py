@@ -85,17 +85,16 @@ def cmd_list_devices(args):
         conn_a = connections_after.get(device_id)
 
         if conn_a and conn_a.get("connected"):
-            status = "✓ Connected"
+            status = "●"
         elif paused:
-            status = "⏸ Paused"
+            status = "⏸"
         else:
-            status = "○ Disconnected"
+            status = "◌"
 
         row = [
             device_id,
             name,
-            status,
-            str_utils.relative_datetime(str_utils.isodate2seconds(last_seen)),
+            status + ' ' + str_utils.relative_datetime(str_utils.isodate2seconds(last_seen)),
             str_utils.duration_short(last_duration),
             bandwidth_str,
         ]
@@ -112,7 +111,6 @@ def cmd_list_devices(args):
     headers = [
         "Device ID",
         "Name",
-        "Status",
         "Last Seen",
         "Duration",
         "Bandwidth Limit",

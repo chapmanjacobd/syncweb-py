@@ -359,7 +359,7 @@ def print_download_summary(args, plan) -> bool:
     warning_suffix = " (WARNING: Insufficient space!)" if warnings else ""
     try:
         response = input(
-            f"\nUnignore {grand_total_files} files ({str_utils.file_size(grand_total_size)})?{warning_suffix} [y/N]: "
+            f"\nMark {grand_total_files} files ({str_utils.file_size(grand_total_size)}) for download?{warning_suffix} [y/N]: "
         )
         return response.lower() in ("y", "yes")
     except (KeyboardInterrupt, EOFError):
@@ -391,13 +391,12 @@ def cmd_download(args):
         rel_paths = [file_path for file_path, _ in files]
 
         try:
-            log.info("Unignoring %d files in folder %s...", len(rel_paths), folder_id)
+            log.info("Queueing %d files in folder %s...", len(rel_paths), folder_id)
             args.st.add_ignores(folder_id, rel_paths)
             download_count += len(rel_paths)
-            log.info("✓ Successfully unignored %d files", len(rel_paths))
 
         except Exception as e:
             log.error("Failed to unignore files in folder %s: %s", folder_id, str(e))
             continue
 
-    log.info("Total: Unignored %d files across %d folders", download_count, len(plan))
+    log.info("Total: Queued %d files across %d folders", download_count, len(plan))

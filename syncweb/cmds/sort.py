@@ -15,7 +15,7 @@ def make_sort_key(sort_modes):
     rand_map = {}  # stable random order per file
 
     def sort_key(file_data):
-        availability = len(file_data.get("availability", []))
+        availability = len(file_data.get("availability") or [])
         metadata = file_data.get("global", file_data.get("local", {}))
         size = metadata["size"]
 

@@ -499,6 +499,16 @@ class SyncthingNode(SyncthingNodeXML):
             params["device"] = device_id
         return self._post("system/resume", params=params)
 
+    def pause_folder(self, folder_id: str):
+        existing_folder = self.folder(folder_id)
+        existing_folder["paused"] = True
+        self._patch(f"config/folders/{folder_id}", json=existing_folder)
+
+    def resume_folder(self, folder_id: str):
+        existing_folder = self.folder(folder_id)
+        existing_folder["paused"] = False
+        self._patch(f"config/folders/{folder_id}", json=existing_folder)
+
     def folder_status(self, folder_id: str):
         return self._get("db/status", params={"folder": folder_id})
 
@@ -513,7 +523,6 @@ class SyncthingNode(SyncthingNodeXML):
         default_folder["rescanIntervalS"] = 7200
         default_folder["fsWatcherDelayS"] = 5
         default_folder["ignorePerms"] = True
-        default_folder["paused"] = True
         default_folder["ignoreDelete"] = True
         default_folder["scanProgressIntervalS"] = -1
         default_folder["copyRangeMethod"] = "all"
@@ -543,6 +552,9 @@ class SyncthingNode(SyncthingNodeXML):
         return self._get("config/folders")
 
     def add_folder(self, **kwargs):
+        if "label" not in kwargs:
+            kwargs["label"] = None
+
         kwargs = self.default_folder() | kwargs
         return self._post("config/folders", json=kwargs)
 
@@ -594,9 +606,9 @@ class SyncthingNode(SyncthingNodeXML):
         all_files = []
         while True:
             resp = fn(*args, **kwargs, page=page, perpage=per_page)
-            progress = resp.get("progress", [])
-            queued = resp.get("queued", [])
-            rest = resp.get("rest", [])
+            progress = resp.get("progress") or []
+            queued = resp.get("queued") or []
+            rest = resp.get("rest") or []
             log.debug("%s got %s progress, %s queued, %s rest", fn.__func__.__qualname__, progress, queued, rest)
 
             batch = progress + queued + rest

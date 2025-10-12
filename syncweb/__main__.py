@@ -65,6 +65,7 @@ def cmd_join(args):
     added_devices, added_folders = args.st.cmd_add(args.urls)
     print("Added", added_devices, "device" if added_devices == 1 else "devices")
     print("Added", added_folders, "folder" if added_folders == 1 else "folders")
+    print("Local Device ID:", args.st.device_id)
 
 
 def cli():
@@ -102,8 +103,8 @@ def cli():
     )
     create.add_argument("paths", nargs="*", default=".", help="Path to folder")
 
-    add = subparsers.add_parser("add", aliases=["accept"], help="Add a device to syncweb", func=cmd_accept)
-    add.add_argument(
+    accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
+    accept.add_argument(
         "device_ids",
         nargs="+",
         action=ArgparseList,

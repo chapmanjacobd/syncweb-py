@@ -44,13 +44,13 @@ def print_stat(args, file_data: dict, path: str) -> None:
     inode_change = local.get("inodeChange", "")
     permissions = local.get("permissions", "0000")
     modified_by = local.get("modifiedBy", "unknown")
-    version = local.get("version", [])
+    version = local.get("version") or []
     num_blocks = local.get("numBlocks", 0)
     deleted = local.get("deleted", False)
     ignored = local.get("ignored", False)
     invalid = local.get("invalid", False)
 
-    availability = file_data.get("availability", [])
+    availability = file_data.get("availability") or []
     num_devices = len(availability)
     device_ids = [args.st.device_long2name(av.get("id", "unknown")) for av in availability]
 

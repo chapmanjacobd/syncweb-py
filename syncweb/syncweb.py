@@ -1,8 +1,6 @@
 import datetime, fnmatch, os
 from pathlib import Path
 
-import requests
-
 from syncweb import str_utils
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
@@ -60,7 +58,7 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
-    def cmd_add(self, urls, decode=True):
+    def cmd_join(self, urls, decode=True):
         device_count, folder_count = 0, 0
         for url in urls:
             ref = str_utils.parse_syncweb_path(url, decode=decode)
@@ -75,8 +73,9 @@ class Syncweb(SyncthingNode):
 
                 folder_id = self.create_folder_id(path)
                 if path not in self.folder_roots:
-                    self.add_folder(id=folder_id, path=path, type="receiveonly")
+                    self.add_folder(id=folder_id, path=path, type="receiveonly", paused=True)
                     self.set_ignores(folder_id)
+                    self.resume_folder(folder_id)
                     folder_count += 1
 
                 if ref.device_id:
@@ -140,24 +139,6 @@ class Syncweb(SyncthingNode):
         except KeyError:
             return f"{short}-???????"
 
-    def delete_device_peered_folders(self, device_id: str):
-        folders = self._get("config/folders")
-        if not folders:
-            print(f"[{self.name}] No folders in config.")
-            return
-
-        target_folders = [f for f in folders if any(d["deviceID"] == device_id for d in f.get("devices", []))]
-        if not target_folders:
-            print(f"[{self.name}] No folders offered by or linked to {device_id}.")
-            return
-        for f in target_folders:
-            fid = f["id"]
-            print(f"[{self.name}] Deleting folder '{fid}' (linked to {device_id})...")
-            try:
-                self._delete(f"config/folders/{fid}")
-            except requests.HTTPError as e:
-                print(f"[{self.name}] Failed to delete folder '{fid}': {e}")
-
     def accept_pending_devices(self):
         pending = self._get("cluster/pending/devices")
         if not pending:
@@ -177,7 +158,7 @@ class Syncweb(SyncthingNode):
             cfg = {
                 "deviceID": dev_id,
                 "name": name,
-                "addresses": info.get("addresses", []),
+                "addresses": info.get("addresses") or [],
                 "compression": "metadata",
                 "introducer": False,
             }
@@ -224,7 +205,7 @@ class Syncweb(SyncthingNode):
     def join_folder(self, folder_id: str, device_ids: list[str]):
         existing_folder = self.folder(folder_id)
 
-        existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices", [])}
+        existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices") or []}
         new_devices = [{"deviceID": d} for d in device_ids if d not in existing_device_ids]
         if not new_devices:
             log.info(f"[%s] Folder '%s' already available to all requested devices", folder_id, self.name)
@@ -242,81 +223,3 @@ class Syncweb(SyncthingNode):
             if fnmatch.fnmatch(s + "/", pat):  # match directories
                 return True
         return False
-
-    def disk_usage(self) -> list[dict]:
-        results = []
-        for folder in self._get("config/folders"):
-            folder_id = folder["id"]
-            folder_path = Path(folder["path"])
-
-            if not folder_path.exists():
-                print(f"[{self.name}] Folder '{folder_id}' path not found: {folder_path}")
-                continue
-
-            ignore_patterns = self.ignores(folder_id)
-
-            for dirpath, _dirnames, filenames in os.walk(folder_path):
-                rel_dir = Path(dirpath).relative_to(folder_path)
-                ignored = self._is_ignored(rel_dir, ignore_patterns)
-
-                total_size = 0
-                last_mod = 0
-
-                for f in filenames:
-                    fpath = Path(dirpath) / f
-                    try:
-                        stat = fpath.stat()
-                    except FileNotFoundError:
-                        continue
-                    total_size += stat.st_size
-                    last_mod = max(last_mod, stat.st_mtime)
-
-                if total_size == 0 and not filenames:
-                    continue  # skip empty dirs
-
-                results.append(
-                    {
-                        "folder": folder_id,
-                        "name": str(rel_dir) if rel_dir != Path(".") else ".",
-                        "size": total_size,
-                        "last_modified": last_mod,
-                        "ignored": ignored,
-                    }
-                )
-
-        return results
-
-    def flatten_files(self, folder_id: str, prefix: str = "", levels: int | None = None):
-        def _recurse(entries, path_prefix):
-            flat = []
-            for e in entries:
-                name = e["name"]
-                typ = e.get("type")
-                full_path = f"{path_prefix}/{name}" if path_prefix else name
-                if typ == "FILE_INFO_TYPE_FILE":
-                    modtime = datetime.datetime.fromisoformat(e["modTime"])
-                    flat.append({"path": full_path, "size": e["size"], "modTime": modtime})
-                elif typ == "FILE_INFO_TYPE_DIRECTORY" and "children" in e:
-                    flat.extend(_recurse(e["children"], full_path))
-            return flat
-
-        tree = self.files(folder_id, prefix=prefix, levels=levels)
-        return _recurse(tree, prefix)
-
-    def aggregate_directory(self, folder_id: str, prefix: str = "", levels: int | None = None):
-        files = self.flatten_files(folder_id, prefix=prefix, levels=levels)
-        if not files:
-            return {"total_size": 0, "last_modified": None}
-
-        total_size = sum(f["size"] for f in files)
-        last_modified = max(f["modTime"] for f in files)
-        return {"total_size": total_size, "last_modified": last_modified}
-
-    def aggregate_files(self, files: list[dict]):
-        if not files:
-            return {"total_size": 0, "last_modified": None, "count": 0}
-
-        total_size = sum(f["size"] for f in files)
-        last_modified = max(f["modTime"] for f in files)
-        count = len(files)
-        return {"total_size": total_size, "last_modified": last_modified, "count": count}

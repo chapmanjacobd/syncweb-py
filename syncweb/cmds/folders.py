@@ -58,7 +58,7 @@ def cmd_list_folders(args):
             err_display.append(err_msg.strip())
         err_display = ", ".join(err_display) or "-"
 
-        devices = folder.get("devices", [])
+        devices = folder.get("devices") or []
         device_count = len(devices) - 1
 
         disk_info = shutil.disk_usage(path)
