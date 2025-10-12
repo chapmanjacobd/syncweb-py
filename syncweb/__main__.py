@@ -81,15 +81,6 @@ def cli():
 
     parser.add_argument("--no-pdb", action="store_true", help="Exit immediately on error. Never launch debugger")
     parser.add_argument(
-        "--ext",
-        "--exts",
-        "--extensions",
-        "-e",
-        default=[],
-        action=ArgparseList,
-        help="Include only specific file extensions",
-    )
-    parser.add_argument(
         "--decode",
         help="Decode percent-encoding and punycode in URLs",
         action=argparse.BooleanOptionalAction,
@@ -243,6 +234,15 @@ def cli():
         help="""Constrain media by time_modified (alternative syntax)
     --time-modified='-3 days' (newer than)
     --time-modified='+3 days' (older than)""",
+    )
+    find.add_argument(
+        "--ext",
+        "--exts",
+        "--extensions",
+        "-e",
+        default=[],
+        action=ArgparseList,
+        help="Include only specific file extensions",
     )
     find.add_argument("pattern", nargs="?", default=".*", help="Search patterns (default: all files)")
     find.add_argument("search_paths", nargs="*", help="Root directories to search")

@@ -593,7 +593,7 @@ class SyncthingNode(SyncthingNodeXML):
         per_page = 50000
         all_files = []
         while True:
-            resp = fn(**kwargs, page=page, perpage=per_page)
+            resp = fn(*args, **kwargs, page=page, perpage=per_page)
             progress = resp.get("progress", [])
             queued = resp.get("queued", [])
             rest = resp.get("rest", [])

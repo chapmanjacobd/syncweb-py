@@ -8,10 +8,9 @@ from syncweb.log_utils import log
 from syncweb.str_utils import file_size
 
 # TODO: add args.st.folder_status(folder_id)
-
+# print syncweb URL per folder with local device ID
 
 def get_disk_usage(path):
-    """Get disk usage for a path."""
     try:
         stat = shutil.disk_usage(path)
         used = stat.total - stat.free
@@ -22,8 +21,6 @@ def get_disk_usage(path):
 
 
 def cmd_list_folders(args):
-    """List all Syncthing folders in a table."""
-
     folders = args.st.folders()
 
     if not folders:

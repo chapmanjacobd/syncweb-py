@@ -119,14 +119,6 @@ def get_folder_space_info(args, folder_id):
 
 
 def group_folders_by_mountpoint(folder_stats):
-    """Group folders that share the same mountpoint.
-
-    Args:
-        folder_stats: Dict mapping folder_id to stats dict
-
-    Returns:
-        Dict mapping mountpoint to list of folder_ids
-    """
     from collections import defaultdict
 
     # Group by free space + total space as a heuristic for same mountpoint
@@ -153,18 +145,9 @@ def group_folders_by_mountpoint(folder_stats):
     return mountpoint_groups
 
 
-def calculate_mountpoint_pending_downloads(folder_ids, folder_stats):
-    """Calculate total pending downloads for folders on a mountpoint.
-
-    Args:
-        folder_ids: List of folder IDs on the same mountpoint
-        folder_stats: Dict mapping folder_id to stats dict
-
-    Returns:
-        Total pending download size in bytes
-    """
+def calculate_mountpoint_pending_downloads(folder_ids, folder_stats) -> int:
     total_pending = 0
-    for folder_id in folder_ids:
+    for folder_id in folder_ids:  # same mountpoint
         space_info = folder_stats[folder_id].get("space_info")
         if space_info:
             total_pending += space_info.get("pending_download", 0)

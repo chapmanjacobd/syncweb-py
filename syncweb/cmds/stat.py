@@ -126,10 +126,9 @@ def print_stat(args, file_data: dict, path: str) -> None:
         widths = [max(len(r[i]) for r in ([headers] + diffs)) for i in range(3)]
         if diffs:
             print()
-            # Print header
+            # header
             print("  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)))
             # print("  ".join("-" * w for w in widths))
-            # Print diffs
             for r in diffs:
                 print("  ".join(str(r[i]).ljust(widths[i]) for i in range(3)))
 

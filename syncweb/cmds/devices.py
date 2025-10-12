@@ -5,10 +5,11 @@ from tabulate import tabulate
 from syncweb.log_utils import log
 
 # TODO: add args.st.device_status(folder_id)
-
+# TODO: show remoteneed (need for local device) and UL/DL speeds, estimated time to completion
 
 def cmd_list_devices(args):
     devices = args.st.devices()
+    device_stats = args.st.device_stats()
 
     if not devices:
         log.info("No devices configured")
@@ -18,15 +19,12 @@ def cmd_list_devices(args):
     table_data = []
 
     for device in devices:
-        device_id = device.get("deviceID", "unknown")
-        # Shorten device ID for display
-        device_id_short = device_id[:7] if len(device_id) > 7 else device_id
+        device_id = device.get("deviceID")
+        device_stat = device_stats[device_id]
+        last_seen = device_stat["lastSeen"]
+        last_duration = device_stat["lastConnectionDurationS"]
 
-        name = device.get("name", "unnamed")
-        addresses = device.get("addresses", [])
-        address_str = ", ".join(addresses[:2])  # Show first 2 addresses
-        if len(addresses) > 2:
-            address_str += f", ... (+{len(addresses) - 2})"
+        name = device.get("name", "<no name>")
 
         compression = device.get("compression", "metadata")
         introducer = "Yes" if device.get("introducer", False) else "No"

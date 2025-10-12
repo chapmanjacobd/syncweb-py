@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List
 
 from syncweb import consts, log_utils
-from syncweb.cmds.ls import is_directory
+from syncweb.cmds.ls import folder_size, is_directory
 from syncweb.log_utils import log
 from syncweb.str_utils import human_to_bytes, human_to_seconds, parse_human_to_lambda, pipe_print
 
@@ -74,24 +74,30 @@ def glob_match(name: str, pattern: str, ignore_case: bool) -> bool:
 
 def matches_constraints(args, item: dict, current_depth: int) -> bool:
     name = item.get("name", "")
+    is_dir = is_directory(item)
 
-    if not args.hidden and name.startswith("."):
-        return False
+    if args.type:
+        if args.type == "d" and not is_dir:
+            return False
+        if args.type == "f" and is_dir:
+            return False
 
     if current_depth < args.min_depth:
         return False
     if args.max_depth is not None and current_depth > args.max_depth:
         return False
 
-    if args.type:
-        is_dir = is_directory(item)
-        if args.type == "d" and not is_dir:
-            return False
-        if args.type == "f" and is_dir:
-            return False
+    if not args.hidden and name.startswith("."):
+        return False
+    if args.ext and not name.lower().endswith(args.ext):
+        return False
 
     if args.sizes:
-        file_size = item.get("size", 0)
+        if is_dir:
+            file_size = folder_size(item)
+        else:
+            file_size = item.get("size", 0)
+
         if not args.sizes(file_size):
             return False
 
@@ -164,6 +170,8 @@ def path2fid_allow_outside(args, abs_path):
 
 
 def cmd_find(args) -> None:
+    args.ext = tuple(s.lower() for s in args.ext)
+
     args.min_depth, args.max_depth = parse_depth_constraints(args.depth, args.min_depth, args.max_depth)
 
     if args.sizes:
