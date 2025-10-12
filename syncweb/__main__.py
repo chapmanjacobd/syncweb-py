@@ -24,47 +24,47 @@ def cmd_version(args):
 
 
 def cmd_restart(args):
-    print("Restarting Syncweb...")
+    log.info("Restarting Syncweb...")
     args.st.restart()
 
 
 def cmd_shutdown(args):
-    print("Shutting down Syncweb...")
+    log.info("Shutting down Syncweb...")
     args.st.shutdown()
 
 
 def cmd_pause(args):
     if args.all:
         added = args.st.cmd_pause()
-        print("Paused all devices")
+        log.info("Paused all devices")
     else:
         added = args.st.cmd_pause(args.device_ids)
-        print("Paused", added, "device" if added == 1 else "devices")
+        log.info("Paused", added, "device" if added == 1 else "devices")
 
 
 def cmd_resume(args):
     if args.all:
         added = args.st.cmd_resume()
-        print("Resumed all devices")
+        log.info("Resumed all devices")
     else:
         added = args.st.cmd_resume(args.device_ids)
-        print("Resumed", added, "device" if added == 1 else "devices")
+        log.info("Resumed", added, "device" if added == 1 else "devices")
 
 
 def cmd_accept(args):
     added = args.st.cmd_accept(args.device_ids)
-    print("Added", added, "device" if added == 1 else "devices")
+    log.info("Added", added, "device" if added == 1 else "devices")
 
 
 def cmd_init(args):
     added = args.st.cmd_init(args.paths)
-    print("Added", added, "folder" if added == 1 else "folders")
+    log.info("Added", added, "folder" if added == 1 else "folders")
 
 
 def cmd_join(args):
     added_devices, added_folders = args.st.cmd_add(args.urls)
-    print("Added", added_devices, "device" if added_devices == 1 else "devices")
-    print("Added", added_folders, "folder" if added_folders == 1 else "folders")
+    log.info("Added", added_devices, "device" if added_devices == 1 else "devices")
+    log.info("Added", added_folders, "folder" if added_folders == 1 else "folders")
     print("Local Device ID:", args.st.device_id)
 
 

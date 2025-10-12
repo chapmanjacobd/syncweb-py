@@ -6,6 +6,7 @@ import requests
 
 from syncweb.cmd_utils import Pclose, cmd
 from syncweb.config import ConfigXML
+from syncweb.consts import PYTEST_RUNNING
 from syncweb.log_utils import log
 
 ROLE_TO_TYPE = {
@@ -34,7 +35,7 @@ class SyncthingNodeXML:
             cmd(self.syncthing_exe, f"--home={self.home_path}", "generate")
 
         self.config = ConfigXML(self.config_path)
-        self.xml_set_default_config()
+        self.xml_set_default_config(PYTEST_RUNNING)
 
         lock_path = self.home_path / "syncthing.lock"
         self.running: bool = lock_path.exists()
@@ -59,7 +60,7 @@ class SyncthingNodeXML:
             default_bin = shutil.which("syncthing") or "syncthing"
         return default_bin
 
-    def xml_set_default_config(self):
+    def xml_set_default_config(self, testing=False):
         node = self.config["device"]
         # node["@id"] = "DWFH3CZ-6D3I5HE-6LPQAHE-YGO3KQY-PX36X4V-BZORCMN-PC2V7O5-WB3KIAR"
         node["@name"] = self.name  # will use hostname by default
@@ -87,34 +88,41 @@ class SyncthingNodeXML:
         # gui["theme"] = "default"
 
         opts = self.config["options"]
+        if testing:
+            opts["globalAnnounceEnabled"] = "false"
+            opts["relaysEnabled"] = "false"
+            opts["maxSendKbps"] = "200"
+            opts["maxRecvKbps"] = "200"
+
+        opts["startBrowser"] = "false"
+        # disable Anonymous Usage Statistics
+        opts["urAccepted"] = "-1"
+        opts["urSeen"] = "3"
+        opts["urInitialDelayS"] = "3600"
+        # disable auto update
+        opts["autoUpgradeIntervalH"] = "0"
+        opts["keepTemporariesH"] = "192"
+        opts["progressUpdateIntervalS"] = "-1"
+        # opts["maxFolderConcurrency"] = "8"
+        # opts["maxConcurrentIncomingRequestKiB"] = "400000"
+        # opts["connectionLimitEnough"] = "8000"
+        # opts["connectionLimitMax"] = "80000"
         # opts["listenAddress"] = "default"  # will be randomly picked
         # opts["globalAnnounceServer"] = "default"
-        opts["globalAnnounceEnabled"] = "false"  # just for test purposes
         # opts["localAnnounceEnabled"] = "true"
         # opts["localAnnouncePort"] = "21027"
         # opts["localAnnounceMCAddr"] = "[ff12::8384]:21027"
-        opts["maxSendKbps"] = "200"  # just for test purposes
-        opts["maxRecvKbps"] = "200"  # just for test purposes
         # opts["reconnectionIntervalS"] = "60"
-        opts["relaysEnabled"] = "false"  # just for test purposes
         # opts["relayReconnectIntervalM"] = "10"
-        opts["startBrowser"] = "false"
         # opts["natEnabled"] = "true"
         # opts["natLeaseMinutes"] = "60"
         # opts["natRenewalMinutes"] = "30"
         # opts["natTimeoutSeconds"] = "10"
-        # disable Anonymous Usage Statistics
-        opts["urAccepted"] = "-1"
-        opts["urSeen"] = "3"
         # opts["urUniqueID"] = ""
         # opts["urURL"] = "https://data.syncthing.net/newdata"
         # opts["urPostInsecurely"] = "false"
-        opts["urInitialDelayS"] = "3600"
-        opts["autoUpgradeIntervalH"] = "0"
         # opts["upgradeToPreReleases"] = "false"
-        opts["keepTemporariesH"] = "192"
         # opts["cacheIgnoredFiles"] = "true"  # TODO: evaluate performance difference
-        opts["progressUpdateIntervalS"] = "-1"
         # opts["limitBandwidthInLan"] = "false"
         # opts["minHomeDiskFree"] = {"@unit": "%", "#text": "1"}
         # opts["releasesURL"] = "https://upgrades.syncthing.net/meta.json"
@@ -123,19 +131,15 @@ class SyncthingNodeXML:
         # opts["unackedNotificationID"] = "authenticationUserAndPassword"
         # opts["trafficClass"] = "0"
         # opts["setLowPriority"] = "true"
-        opts["maxFolderConcurrency"] = "8"
         # opts["crashReportingURL"] = "https://crash.syncthing.net/newcrash"
         # opts["crashReportingEnabled"] = "true"
         # opts["stunKeepaliveStartS"] = "180"
         # opts["stunKeepaliveMinS"] = "20"
         # opts["stunServer"] = "default"
-        opts["maxConcurrentIncomingRequestKiB"] = "400000"
         # opts["announceLANAddresses"] = "true"
         # opts["sendFullIndexOnUpgrade"] = "false"
         # opts["auditEnabled"] = "false"
         # opts["auditFile"] = ""
-        opts["connectionLimitEnough"] = "8000"
-        opts["connectionLimitMax"] = "80000"
         # opts["connectionPriorityTcpLan"] = "10"
         # opts["connectionPriorityQuicLan"] = "20"
         # opts["connectionPriorityTcpWan"] = "30"
