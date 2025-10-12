@@ -94,7 +94,7 @@ def cmd_list_devices(args):
         row = [
             device_id,
             name,
-            status + ' ' + str_utils.relative_datetime(str_utils.isodate2seconds(last_seen)),
+            status + " " + str_utils.relative_datetime(str_utils.isodate2seconds(last_seen)),
             str_utils.duration_short(last_duration),
             bandwidth_str,
         ]

@@ -1,4 +1,4 @@
-import datetime, fnmatch, os
+import fnmatch, os
 from pathlib import Path
 
 from syncweb import str_utils
