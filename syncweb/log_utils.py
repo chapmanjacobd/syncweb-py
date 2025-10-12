@@ -1,0 +1,70 @@
+import argparse, logging, os, sys
+
+from IPython.core import ultratb
+from IPython.terminal import debugger
+
+
+def check_stdio():
+    try:
+        has_stdin = os.getpgrp() == os.tcgetpgrp(sys.stdin.fileno())
+        has_stdout = os.getpgrp() == os.tcgetpgrp(sys.stdout.fileno())
+    except Exception:
+        has_stdin, has_stdout = False, False
+    return has_stdin, has_stdout
+
+
+has_stdin, has_stdout = check_stdio()
+is_terminal = has_stdin and has_stdout
+
+
+def format_args(pargs, kwargs):
+    args_str = ", ".join(repr(arg) for arg in pargs)
+    kwargs_str = ", ".join(f"{key}={value!r}" for key, value in kwargs.items())
+
+    if args_str and kwargs_str:
+        return f"{args_str}, {kwargs_str}"
+    elif args_str:
+        return args_str
+    elif kwargs_str:
+        return kwargs_str
+    else:
+        return ""
+
+
+def clamp_index(arr, idx):
+    return arr[min(max(idx, 0), len(arr) - 1)]
+
+
+def argparse_log() -> logging.Logger:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--verbose", "-v", action="count", default=0)
+    parser.add_argument("--no-pdb", action="store_true")
+    args, _unknown = parser.parse_known_args()
+
+    if args.verbose > 0 and has_stdin and has_stdout:
+        sys.breakpointhook = debugger.set_trace
+        if not args.no_pdb:
+            sys.excepthook = ultratb.FormattedTB(
+                mode="Verbose" if args.verbose > 1 else "Context",
+                theme_name="Neutral",
+                call_pdb=True,
+                debugger_cls=debugger.TerminalPdb,
+            )
+
+    log_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+
+    if args.verbose > 3 or args.verbose == 0:
+        logging.root.handlers = []  # clear any existing handlers
+        logging.basicConfig(
+            level=clamp_index(log_levels, args.verbose),
+            format="%(message)s",
+        )
+    else:
+        logging.basicConfig(format="%(message)s")
+
+    logger = logging.getLogger("syncweb")
+    logger.setLevel(clamp_index(log_levels, args.verbose))
+    return logger
+
+
+log = argparse_log()

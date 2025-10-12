@@ -43,13 +43,18 @@ Syncweb will never replace your online banking app. While it may be possible to 
 
 The traditional web has a robust line of authority via the Domain Name System so you can easily know whether you are on your bank's website or not. Syncweb has left this authority up to the community. Syncthing does not have a built-in certificate revocation mechanism like Certificate Authorities (CAs) do. You control the trust relationships of your devices directly.
 
-## How to use
+## Usage
 
 > It doesn't matter much who invented the microprocessor, the mouse, TCP/IP or the World Wide Web; nor does it matter what ideas were behind these inventions. What matters is who uses them. Only when users start to express themselves with these technical innovations do they truly become relevant to culture at large.
 
 - drx, olia
 
+### Links
+
+> For example, a browser can be used in AFS by using “file://” rather than “http://” in addresses.  All of the powerful caching and consistence-maintenance machinery that is built into AFS would then have been accessible through a user-friendly tool that has eventually proved to be enormously valuable.  It is possible that the browser and AFS could have had a much more symbiotic evolution, as HTTP and browsers eventually did.
+>
+> Mahadev Satyanarayanan
+
 ## Differences from Syncthing
 
 - Selective sync
-- Append-only folder setting. You can add files and delete your own files but you can't modify or delete other people's files--you can, of course, choose to not download them; this is similar to the traditional web where people can buy their own domain name and append their content

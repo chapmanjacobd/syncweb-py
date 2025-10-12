@@ -1,0 +1,24 @@
+name: PyTest and Publish
+
+on:
+  push:
+    tags: ['v[0-9].[0-9]+.[0-9]+']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pdm-project/setup-pdm@v4
+
+      - run: |
+          pdm config request_timeout 100
+          pdm publish
