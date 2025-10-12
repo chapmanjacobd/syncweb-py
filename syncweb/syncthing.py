@@ -16,9 +16,9 @@ ROLE_TO_TYPE = {
 
 
 class SyncthingNodeXML:
-    def __init__(self, name: str = "st-node", bin=None, base_dir=None):
+    def __init__(self, name: str = "st-node", syncthing_exe=None, base_dir=None):
         self.name = name
-        self.bin = bin or self.find_syncthing_bin()
+        self.syncthing_exe = syncthing_exe or self.find_syncthing_bin()
         self.process: subprocess.Popen
         self.sync_port: int
         self.discovery_port: int
@@ -31,7 +31,7 @@ class SyncthingNodeXML:
         self.config_path = self.home_path / "config.xml"
 
         if not self.config_path.exists():
-            cmd(self.bin, f"--home={self.home_path}", "generate")
+            cmd(self.syncthing_exe, f"--home={self.home_path}", "generate")
 
         self.config = ConfigXML(self.config_path)
         self.xml_set_default_config()
@@ -274,7 +274,7 @@ class SyncthingNodeXML:
 
         self.xml_update_config()
 
-        cmd = [self.bin, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
+        cmd = [self.syncthing_exe, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
 
         if daemonize:
             z = subprocess.DEVNULL

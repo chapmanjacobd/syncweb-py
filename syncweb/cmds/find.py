@@ -66,8 +66,8 @@ def glob_match(name: str, pattern: str, ignore_case: bool) -> bool:
         else:
             if fnmatch.fnmatchcase(name, pattern):
                 return True
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("glob failed, %s", e)
 
     return False
 
