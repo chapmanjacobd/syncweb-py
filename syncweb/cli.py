@@ -1,6 +1,8 @@
-import argparse, sys, textwrap
+import argparse, json, shlex, sys, textwrap
+from itertools import zip_longest
 from typing import Any, Callable, Dict, List, Optional
 
+from syncweb import consts
 from syncweb.log_utils import log
 from syncweb.str_utils import flatten, safe_len
 
@@ -40,13 +42,15 @@ class Subcommand:
         help: str = "",
         aliases: Optional[List[str]] = None,
         func: Optional[Callable[[argparse.Namespace], Any]] = None,
+        formatter_class=None,
     ):
         self.name = name
         self.help = help
         self.aliases = aliases or []
         self.func = func
         # Set add_help=False to handle help manually
-        self._parser = argparse.ArgumentParser(prog=name, description=help, add_help=False)
+        formatter = formatter_class or (lambda prog: argparse.RawTextHelpFormatter(prog, max_help_position=40))
+        self._parser = argparse.ArgumentParser(prog=name, description=help, add_help=False, formatter_class=formatter)
 
     @property
     def all_names(self) -> List[str]:
@@ -63,6 +67,169 @@ class Subcommand:
         self._parser.print_help()
 
 
+def type_to_str(t):
+    type_dict = {
+        int: "Integer",
+        float: "Float",
+        bool: "Boolean",
+        str: "String",
+        list: "List",
+        tuple: "Tuple",
+        dict: "Dictionary",
+        set: "Set",
+    }
+    _type = type_dict.get(t)
+
+    if _type is None and getattr(t, "__annotations__", False):
+        _type = type_dict.get(t.__annotations__["return"])
+    if _type is None:
+        _type = "Value"
+
+    return _type.upper()
+
+
+def format_two_columns(text1, text2, width1=25, width2=75, left_gutter=2, middle_gutter=2, right_gutter=3):
+    terminal_width = min(consts.TERMINAL_SIZE.columns, 120) - (left_gutter + middle_gutter + right_gutter)
+    if text2:
+        width1 = int(terminal_width * (width1 / (width1 + width2)))
+        width2 = int(terminal_width * (width2 / (width1 + width2)))
+    else:
+        width1 = terminal_width
+
+    wrapped_text1 = []
+    for t in text1.strip().split("\n"):
+        if len(t) <= width1:
+            wrapped_text1.append(t)
+        else:
+            wrapped_text1.extend(textwrap.wrap(t, width=width1, break_on_hyphens=False))
+
+    wrapped_text2 = []
+    for t in text2.split("\n"):
+        if len(t) <= width2:
+            wrapped_text2.append(t)
+        else:
+            wrapped_text2.extend(textwrap.wrap(t, width=width2, break_on_hyphens=False))
+
+    formatted_lines = [
+        f"{' ' * left_gutter}{line1:<{width1}}{' ' * middle_gutter}{line2:<{width2}}{' ' * right_gutter}".rstrip()
+        for line1, line2 in zip_longest(wrapped_text1, wrapped_text2, fillvalue="")
+    ]
+
+    return "\n".join(formatted_lines) + "\n"
+
+
+def default_to_str(obj):
+    if obj is None:
+        return None
+    elif isinstance(obj, (list, tuple, set)):
+        if len(obj) == 0:
+            return None
+        else:
+            return '"' + ", ".join(shlex.quote(s) for s in obj) + '"'
+    elif isinstance(obj, dict):
+        return json.dumps(obj)
+    if isinstance(obj, str):
+        return '"' + str(obj) + '"'
+    else:
+        return str(obj)
+
+
+class CustomHelpFormatter(argparse.RawTextHelpFormatter):
+    def _metavar_formatter(self, action, default_metavar):
+        if action.metavar is not None:
+            result = action.metavar
+        elif action.choices is not None:
+            choice_strs = [str(choice) for choice in action.choices]
+            result = "{%s}" % " ".join(choice_strs)
+        else:
+            result = default_metavar
+
+        def format(tuple_size):  # noqa: A001
+            if isinstance(result, tuple):
+                return result
+            else:
+                return (result,) * tuple_size
+
+        return format
+
+    def _format_args(self, action, default_metavar):
+        get_metavar = self._metavar_formatter(action, default_metavar)
+        if action.nargs == argparse.ZERO_OR_MORE:
+            result = "[%s ...]" % get_metavar(1)
+        elif action.nargs == argparse.ONE_OR_MORE:
+            result = "%s ..." % get_metavar(1)
+        else:
+            result = super()._format_args(action, default_metavar)
+        return result
+
+    def _format_default(self, action, opts):
+        default = ""
+        if action.default is not None:
+            if isinstance(action, argparse.BooleanOptionalAction):
+                if action.default:
+                    default = opts[0]
+                else:
+                    default = opts[1]
+            elif isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)):
+                pass
+            elif action.default == "":
+                pass
+            else:
+                default = default_to_str(action.default)
+        return default
+
+    def _format_usage(self, usage, actions, groups, prefix):
+        if usage is None:
+            return super()._format_usage(usage, actions, groups, prefix)
+
+        return "usage: %s\n\n" % usage
+
+    def _format_action(self, action):
+        help_text = self._expand_help(action) if action.help else ""
+
+        if help_text == "show this help message and exit":
+            return ""  # not very useful self-referential humor
+
+        subactions = [self._format_action(subaction) for subaction in self._iter_indented_subactions(action)]
+
+        opts = action.option_strings
+        if not opts and not help_text:
+            return ""
+        elif not opts:  # positional with help text
+            opts = [action.dest.upper()]
+
+        if len(opts) == 1:
+            left = opts[0]
+        elif isinstance(action, argparse.BooleanOptionalAction):
+            left = f"{opts[0]} / {opts[1]}"
+        elif opts[-1].startswith("--"):
+            left = opts[0]
+        else:
+            left = f"{opts[0]} ({opts[-1]})"
+
+        left += "\n  " + self._format_args(action, type_to_str(action.type or str))
+        left += "\n"
+
+        default = self._format_default(action, opts)
+        const = default_to_str(action.const)
+
+        extra = []
+        if default:
+            extra.append(f"default: {default}")
+        if not isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)) and const:
+            extra.append(f"const: {const}")
+        extra = "; ".join(extra)
+
+        extra = extra.rstrip()
+        if extra:
+            help_text = help_text or ""
+            if help_text:
+                help_text += " "
+            help_text += f"({extra})"
+
+        return "".join(subactions) + format_two_columns(left, help_text)
+
+
 class SubParser:
     def __init__(
         self,
@@ -74,6 +241,7 @@ class SubParser:
         self.parser = parser or argparse.ArgumentParser()
         self.default_command = default_command
         self.version = version
+        self.formatter_class = CustomHelpFormatter
         self.subcommands: Dict[str, Subcommand] = {}
 
     def add_argument(self, *args, **kwargs):
@@ -90,7 +258,7 @@ class SubParser:
         aliases: Optional[List[str]] = None,
         func: Optional[Callable[[argparse.Namespace], Any]] = None,
     ) -> Subcommand:
-        cmd = Subcommand(name, help, aliases, func)
+        cmd = Subcommand(name, help, aliases, func, formatter_class=self.formatter_class)
         for n in cmd.all_names:
             if n in self.subcommands:
                 raise ValueError(f"Duplicate subcommand name or alias: {n}")
@@ -120,7 +288,7 @@ class SubParser:
             self.error(f"Unknown command: '{cmd_name}'")
 
         # Check if help is requested for this subcommand
-        if any(arg in ("-h", "--help") for arg in argv[cmd_index + 1:]):
+        if any(arg in ("-h", "--help") for arg in argv[cmd_index + 1 :]):
             # merge global args into subcommand parser for help display
             for action in self.parser._actions:
                 if action.option_strings and action.dest != "help":

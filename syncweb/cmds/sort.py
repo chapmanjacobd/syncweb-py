@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import datetime, random, shlex
+import random, shlex
 from pathlib import Path
 
 from syncweb import str_utils

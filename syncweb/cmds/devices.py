@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 import time
 from datetime import datetime
+
 from tabulate import tabulate
+
 from syncweb import str_utils
-from syncweb.log_utils import log
-
-from tabulate import tabulate
-
 from syncweb.log_utils import log
 
 # TODO: show remoteneed (need for local device); estimated time to completion

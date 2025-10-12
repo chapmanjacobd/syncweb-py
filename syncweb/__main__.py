@@ -133,7 +133,9 @@ def cli():
     devices = subparsers.add_parser(
         "devices", aliases=["list-devices", "lsd"], help="List Syncthing devices", func=cmd_list_devices
     )
-    devices.add_argument("--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics")
+    devices.add_argument(
+        "--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics"
+    )
 
     pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
     pause.add_argument("--all", "-a", action="store_true", help="All devices")

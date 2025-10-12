@@ -8,7 +8,6 @@ from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 import humanize
 from idna import decode as puny_decode
 
-from syncweb import consts
 from syncweb.consts import FolderRef
 from syncweb.log_utils import log
 
@@ -217,8 +216,10 @@ def safe_float(s) -> float | None:
     except Exception:
         return None
 
+
 def isodate2seconds(isodate):
     return int(datetime.datetime.fromisoformat(isodate.replace("Z", "+00:00")).timestamp())
+
 
 def duration_short(seconds, format_str="%0.1f") -> str:
     seconds = safe_int(seconds)
@@ -247,6 +248,7 @@ def duration_short(seconds, format_str="%0.1f") -> str:
         return f"{format_str % days} days"
     except OverflowError:
         return ""
+
 
 def relative_datetime(seconds) -> str:
     seconds = safe_float(seconds)
