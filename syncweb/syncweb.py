@@ -87,8 +87,6 @@ class Syncweb(SyncthingNode):
                     # or check size first?
                     self.add_ignores(folder_id, [ref.subpath])
 
-            raise
-
         return device_count, folder_count
 
     def cmd_init(self, paths):
@@ -99,6 +97,7 @@ class Syncweb(SyncthingNode):
             folder_id = self.create_folder_id(path)
             self.add_folder(id=folder_id, path=path, type="sendonly")
             self.set_ignores(folder_id)
+            print(f"sync://{folder_id}#{self.device_id}")
             folder_count += 1
         return folder_count
 
