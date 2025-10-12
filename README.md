@@ -20,17 +20,13 @@ Start your syncweb cluster by creating your first folder
 
 ```sh
 $ syncweb create audio/
-
 sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
-Added 1 folder
 ```
 
 Share your new folder with someone else
 
 ```sh
 $ syncweb join sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
-Added 1 device
-Added 1 folder
 Local Device ID: NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
 ```
 
@@ -38,7 +34,6 @@ Local Device ID: NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
 
 ```sh
 $ syncweb accept NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
-Added 1 device
 ```
 
 ### List files
