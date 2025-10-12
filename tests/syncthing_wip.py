@@ -1,6 +1,5 @@
-from syncweb.cmd_utils import cmd
-
 import tests.fstree as fstree
+from syncweb.cmd_utils import cmd
 from syncweb.syncthing import SyncthingCluster
 
 cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)

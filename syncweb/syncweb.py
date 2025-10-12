@@ -69,20 +69,19 @@ class Syncweb(SyncthingNode):
                 device_count += 1
 
             if ref.folder_id:
-                default_path = self.default_folder()["path"]
-                if not default_path:
-                    default_path = os.path.realpath(".")
-                    self.set_default_folder(path=default_path)
-
+                default_path = os.path.realpath(".")
                 path = os.path.join(default_path, ref.folder_id)
                 os.makedirs(path, exist_ok=True)
 
                 folder_id = self.create_folder_id(path)
-                self.add_folder(id=folder_id, path=path, type="receiveonly")
-                self.set_ignores(folder_id)
-                folder_count += 1
+                if path not in self.folder_roots:
+                    self.add_folder(id=folder_id, path=path, type="receiveonly")
+                    self.set_ignores(folder_id)
+                    folder_count += 1
 
-                # TODO: add devices to folder
+                if ref.device_id:
+                    self.join_folder(ref.folder_id, [ref.device_id])
+
                 if ref.subpath:
                     # TODO: ask to confirm if ref.subpath == "/" ?
                     # or check size first?
@@ -104,24 +103,43 @@ class Syncweb(SyncthingNode):
         return folder_count
 
     def add_ignores(self, folder_id: str, exclusions: list[str]):
-        existing = self.ignores(folder_id)
+        existing = set(s for s in self.ignores(folder_id)["ignore"] if not s.startswith("// Syncweb-managed"))
 
-        patterns = {"*"}
+        new = set()
         for p in exclusions:
-            if p.startswith("#"):
+            if p.startswith("//"):
                 continue
-            if not p.startswith("!"):
-                p = "!" + p
-            patterns.add(p)
+            if not p.startswith("!/"):
+                p = "!/" + p
+            new.add(p)
 
-        combined = patterns.union(existing)
+        combined = new.union(existing)
         ordered = (
-            ["# Syncweb-managed: DO NOT MODIFY", "*"]
+            ["// Syncweb-managed"]
             + sorted([p for p in combined if p.startswith("!")])
             + sorted([p for p in combined if not p.startswith("!") and p != "*"])
+            + ["*"]
         )
 
         self.set_ignores(folder_id, lines=ordered)
+
+    def device_short2long(self, short):
+        matches = [d for d in self.devices_list if d.startswith(short)]
+        if len(matches) == 1:
+            dev_id = matches[0]
+            return dev_id
+        return None
+
+    def device_long2name(self, long):
+        short = long[:7]
+
+        try:
+            name = self.devices_dict[long].get("name")
+            if not name or name.lower() in ("syncweb", "syncthing"):
+                return short
+            return f"{name} ({short})"
+        except KeyError:
+            return f"{short}-???????"
 
     def delete_device_peered_folders(self, device_id: str):
         folders = self._get("config/folders")
@@ -166,6 +184,7 @@ class Syncweb(SyncthingNode):
             }
             self._put(f"config/devices/{dev_id}", json=cfg)
 
+    # TODO: break down more composable
     def accept_pending_folders(self, folder_id: str | None = None):
         pending = self._get("cluster/pending/folders")
         if not pending:
@@ -190,20 +209,9 @@ class Syncweb(SyncthingNode):
                 log.info(f"[%s] No devices offering folder '%s'", self.name, fid)
                 continue
 
-            if fid in existing_folder_ids:
-                # folder exists; just add new devices
-                existing_folder = existing_folder_ids[fid]
-                existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices", [])}
-                new_devices = [{"deviceID": d} for d in device_ids if d not in existing_device_ids]
-                if not new_devices:
-                    log.info(f"[%s] Folder '%s' already available to all known devices", self.name, fid)
-                    continue
-
-                existing_folder["devices"].extend(new_devices)
-                log.info(f"[%s] Patching '%s' with %s new devices", self.name, fid, len(new_devices))
-                self._patch(f"config/folders/{fid}", json=existing_folder)
-            else:
-                # folder doesn't exist; create it ?
+            if fid in existing_folder_ids:  # folder exists; just add new devices
+                self.join_folder(fid, device_ids)
+            else:  # folder doesn't exist; create it (with devices)
                 log.info(f"[%s] Creating folder '%s'", self.name, fid)
                 cfg = {
                     "id": fid,
@@ -213,6 +221,19 @@ class Syncweb(SyncthingNode):
                     "devices": [{"deviceID": d} for d in device_ids],
                 }
                 self._post("config/folders", json=cfg)
+
+    def join_folder(self, folder_id: str, device_ids: list[str]):
+        existing_folder = self.folder(folder_id)
+
+        existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices", [])}
+        new_devices = [{"deviceID": d} for d in device_ids if d not in existing_device_ids]
+        if not new_devices:
+            log.info(f"[%s] Folder '%s' already available to all requested devices", folder_id, self.name)
+            return
+
+        existing_folder["devices"].extend(new_devices)
+        log.debug(f"[%s] Patching '%s' with %s new devices", folder_id, self.name, len(new_devices))
+        self._patch(f"config/folders/{folder_id}", json=existing_folder)
 
     def _is_ignored(self, rel_path: Path, patterns: list[str]) -> bool:
         s = str(rel_path)
@@ -300,6 +321,7 @@ class Syncweb(SyncthingNode):
         last_modified = max(f["modTime"] for f in files)
         count = len(files)
         return {"total_size": total_size, "last_modified": last_modified, "count": count}
+
 
 '''
 

@@ -1,6 +1,5 @@
+import os, sys
 from datetime import datetime, timezone
-import os
-import sys
 from typing import NamedTuple
 
 APPLICATION_START = int(datetime.now(tz=timezone.utc).timestamp())

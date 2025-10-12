@@ -2,10 +2,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-from syncweb.cmd_utils import cmd
 
 import tests.db as db
 import tests.fstree as fstree
+from syncweb.cmd_utils import cmd
 from syncweb.syncthing import SyncthingCluster
 
 

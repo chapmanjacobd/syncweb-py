@@ -3,6 +3,7 @@ import argparse, logging, os, sys
 from IPython.core import ultratb
 from IPython.terminal import debugger
 
+
 def check_stdio():
     try:
         has_stdin = os.getpgrp() == os.tcgetpgrp(sys.stdin.fileno())
@@ -11,8 +12,10 @@ def check_stdio():
         has_stdin, has_stdout = False, False
     return has_stdin, has_stdout
 
+
 has_stdin, has_stdout = check_stdio()
 is_terminal = has_stdin and has_stdout
+
 
 def format_args(pargs, kwargs):
     args_str = ", ".join(repr(arg) for arg in pargs)

@@ -1,8 +1,7 @@
-import shlex
-from shutil import which
-import subprocess
-import os, sys
+import os, shlex, subprocess, sys
 from pathlib import Path
+from shutil import which
+
 from syncweb.consts import IS_WINDOWS, PYTEST_RUNNING
 from syncweb.log_utils import log
 
@@ -43,6 +42,7 @@ def os_bg_kwargs() -> dict:
         # DETACHED_PROCESS = 0x00000008
         # os_kwargs = dict(creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
         return {}
+
 
 def cmd(
     *command, strict=True, cwd=None, quiet=True, error_verbosity=1, ignore_regexps=None, limit_ram=False, **kwargs

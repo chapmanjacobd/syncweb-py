@@ -1,9 +1,10 @@
-import argparse, sys
-import textwrap
+import argparse, sys, textwrap
 from typing import Any, Callable, Dict, List, Optional
 
 from syncweb.log_utils import log
-from syncweb.str_utils import safe_len
+from syncweb.str_utils import flatten, safe_len
+
+STDIN_DASH = ["-"]
 
 
 class ArgparseList(argparse.Action):
@@ -16,6 +17,20 @@ class ArgparseList(argparse.Action):
             items.extend(flatten(s.split(",") for s in values))  # type: ignore
 
         setattr(namespace, self.dest, items)
+
+
+class ArgparseArgsOrStdin(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values == STDIN_DASH:
+            print(f"{parser.prog}: Reading from stdin...", file=sys.stderr)
+            lines = sys.stdin.readlines()
+            if not lines or (len(lines) == 1 and lines[0].strip() == ""):
+                lines = None
+            else:
+                lines = [s.strip() for s in lines]
+        else:
+            lines = values
+        setattr(namespace, self.dest, lines)
 
 
 class Subcommand:

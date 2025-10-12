@@ -1,8 +1,8 @@
-import base64, datetime, hashlib, os, re
+import base64, datetime, hashlib, os, re, sys
 from contextlib import suppress
 from datetime import timezone as tz
 from pathlib import Path
-import sys
+from typing import Iterable, Iterator
 from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 
 import humanize
@@ -255,9 +255,15 @@ def format_time(mod_time: str, long_format: bool = False) -> str:
 
     try:
         dt = datetime.datetime.fromisoformat(mod_time.replace("Z", "+00:00"))
-        return dt.strftime("%b %d %H:%M")
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if dt.year == now.year:
+            # This year: show date + time in local time
+            return dt.astimezone().strftime("%d %b %H:%M")
+        else:
+            # Older than this year (or future files!): show date + year
+            return dt.astimezone().strftime("%d %b  %Y")
     except (ValueError, AttributeError):
-        return mod_time[:16] if mod_time else ""
+        return mod_time[:16] + mod_time[-6:] if mod_time else ""
 
 
 def human_to_seconds(input_str):
@@ -315,6 +321,7 @@ def human_to_bytes(input_str, binary=True) -> int:
     unit_multiplier = byte_map.get(unit, k**2)  # default to MB / MBit
     return int(float(value) * unit_multiplier)
 
+
 def human_to_lambda_part(var, human_to_x, size):
     if var is None:
         var = 0
@@ -347,6 +354,7 @@ def parse_human_to_lambda(human_to_x, sizes):
 
     return check_all_sizes
 
+
 def pipe_print(*args, **kwargs) -> None:
     if "flush" not in kwargs:
         kwargs["flush"] = True
@@ -365,3 +373,15 @@ def safe_len(list_):
         return len(list_)
     except Exception:
         return len(str(list_))
+
+
+def flatten(xs: Iterable) -> Iterator:
+    for x in xs:
+        if isinstance(x, dict):
+            yield x
+        elif isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+            yield from flatten(x)
+        elif isinstance(x, bytes):
+            yield x.decode("utf-8")
+        else:
+            yield x

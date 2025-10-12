@@ -1,8 +1,10 @@
-from pathlib import Path
 import shlex
-from syncweb.log_utils import log
+from pathlib import Path
+
 from syncweb import str_utils
+from syncweb.log_utils import log
 from syncweb.str_utils import format_time
+
 
 def path2fid(args, abs_path):
     for folder in args.st.folders() or []:
@@ -17,8 +19,10 @@ def path2fid(args, abs_path):
 
     return None, None
 
+
 def is_directory(item: dict) -> bool:
     return item.get("type") == "FILE_INFO_TYPE_DIRECTORY"
+
 
 def folder_size(item: dict) -> int:
     if not is_directory(item) or "children" not in item:
@@ -28,6 +32,7 @@ def folder_size(item: dict) -> int:
     for child in item["children"]:
         total += folder_size(child)
     return total
+
 
 def print_entry(item: dict, long: bool = False, human_readable: bool = False) -> None:
     name = item.get("name", "")
@@ -46,11 +51,13 @@ def print_entry(item: dict, long: bool = False, human_readable: bool = False) ->
     else:
         print(display_name)
 
+
 def calculate_depth(item: dict) -> int:
     if not is_directory(item) or "children" not in item or not item["children"]:
         return 0
 
     return 1 + max(calculate_depth(child) for child in item["children"])
+
 
 def print_directory(args, items, current_level: int = 1, indent: int = 0) -> None:
     sorted_items = sorted(
@@ -84,14 +91,17 @@ def print_directory(args, items, current_level: int = 1, indent: int = 0) -> Non
             if indent == 0:
                 print()
 
+
 def cmd_ls(args):
-    header_printed = not(args.long and not args.no_header)
+    args.folder_size = args.folder_size and args.long
+
+    header_printed = not (args.long and not args.no_header)
 
     def print_header():
         nonlocal header_printed
 
         HEADER_FORMAT = "{:<4} {:>10}  {:>12}  {}"
-        HEADER_LINE = HEADER_FORMAT.format('Type', 'Size', 'Modified', 'Name')
+        HEADER_LINE = HEADER_FORMAT.format("Type", "Size", "Modified", "Name")
         print(HEADER_LINE)
         print("-" * len(HEADER_LINE))
         header_printed = True
@@ -100,12 +110,24 @@ def cmd_ls(args):
         abs_path = Path(path).resolve()
         folder_id, prefix = path2fid(args, abs_path)
         if folder_id is None:
-            log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
+            log.error("Error: %s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
             continue
 
-        levels = None if args.recursive else args.depth
+        levels = None if args.folder_size else args.depth
         data = args.st.files(folder_id, levels=levels, prefix=prefix)
         log.debug("files: %s top-level data", len(data))
+
+        if not data and prefix:  # must be a file or not exist
+            file_data = args.st.file(folder_id, prefix)
+            if file_data:
+                item = file_data.get("global", file_data.get("local", {}))
+                item["modTime"] = item["modified"]
+                item["type"] = item.get("type", "FILE_INFO_TYPE_FILE")
+                if item:
+                    if not header_printed:
+                        print_header()
+                    print_entry(item, args.long, args.human_readable)
+            continue
 
         if data and not header_printed:
             print_header()

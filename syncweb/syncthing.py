@@ -1,12 +1,12 @@
-import os, shutil, socket, subprocess, sys, tempfile, time, urllib.parse
+import os, shutil, socket, subprocess, sys, tempfile, time
 from functools import cached_property
 from pathlib import Path
 
 import requests
-from syncweb.log_utils import log
 
 from syncweb.cmd_utils import Pclose, cmd
 from syncweb.config import ConfigXML
+from syncweb.log_utils import log
 
 ROLE_TO_TYPE = {
     "r": "receiveonly",
@@ -192,9 +192,9 @@ class SyncthingNodeXML:
                 "type": ROLE_TO_TYPE.get(folder_type, folder_type),
                 "rescanIntervalS": "3600",
                 "fsWatcherEnabled": "false" if is_fakefs else "true",
-                "fsWatcherDelayS": "10",
+                "fsWatcherDelayS": "5",
                 "fsWatcherTimeoutS": "0",
-                "ignorePerms": "false",
+                "ignorePerms": "true",
                 "autoNormalize": "true",
             },
         )
@@ -209,7 +209,7 @@ class SyncthingNodeXML:
         folder["hashers"] = "0"
         folder["order"] = "random"
         folder["ignoreDelete"] = "false"
-        folder["scanProgressIntervalS"] = "0"
+        folder["scanProgressIntervalS"] = "-1"
         folder["pullerPauseS"] = "0"
         folder["pullerDelayS"] = "1"
         folder["maxConflicts"] = "10"
@@ -462,6 +462,22 @@ class SyncthingNode(SyncthingNodeXML):
     def devices(self):
         return self._get("config/devices")
 
+    @property
+    def devices_list(self):
+        return [d["deviceID"] for d in self.devices()]
+
+    @property
+    def devices_dict(self):
+        return {d["deviceID"]: d for d in self.devices()}
+
+    @property
+    def folders_dict(self):
+        return {d["id"]: d for d in self.folders()}
+
+    @property
+    def folder_roots(self):
+        return {d["path"]: d["id"] for d in self.folders()}
+
     def add_device(self, **kwargs):
         return self._post("config/devices", json=kwargs)
 
@@ -489,9 +505,20 @@ class SyncthingNode(SyncthingNodeXML):
     def default_folder(self):
         return self._get("config/defaults/folder")
 
-    def set_default_folder(self, **kwargs):
-        kwargs = self.default_folder() | kwargs
-        return self._put("config/defaults/folder", json=kwargs)
+    def set_default_folder(self, **folder):
+        default_folder = self.default_folder()
+        default_folder["name"] = "default"
+        default_folder["label"] = "Syncweb Default"
+        default_folder["path"] = os.path.realpath(".")
+        default_folder["rescanIntervalS"] = 7200
+        default_folder["fsWatcherDelayS"] = 5
+        default_folder["ignorePerms"] = True
+        default_folder["paused"] = True
+        default_folder["ignoreDelete"] = True
+        default_folder["scanProgressIntervalS"] = -1
+        default_folder["copyRangeMethod"] = "all"
+        folder = default_folder | folder
+        return self._put("config/defaults/folder", json=folder)
 
     def default_ignores(self):
         return self._get("config/defaults/ignores")
@@ -541,14 +568,15 @@ class SyncthingNode(SyncthingNodeXML):
         return self._get("db/browse", params=params)
 
     def file(self, folder_id: str, relative_path: str):
-        params = {"folder": folder_id, "file": urllib.parse.quote(relative_path, safe="")}
+        params = {"folder": folder_id, "file": relative_path}
 
-        resp = self.session.get("db/file", params=params)
+        resp = self.session.get(f"{self.api_url}/rest/db/file", params=params)
         if resp.status_code == 404:
             log.warning("404 Not Found %s", relative_path)
+            return
         else:
             resp.raise_for_status()
-        return resp
+        return resp.json()
 
     def folder_revert(self, receiveonly_folder_id: str):
         return self._post("db/revert", json={"folder": receiveonly_folder_id})
@@ -565,7 +593,7 @@ class SyncthingNode(SyncthingNodeXML):
         per_page = 50000
         all_files = []
         while True:
-            resp = fn(*args, **kwargs, page=page, perpage=per_page)
+            resp = fn(**kwargs, page=page, perpage=per_page)
             progress = resp.get("progress", [])
             queued = resp.get("queued", [])
             rest = resp.get("rest", [])

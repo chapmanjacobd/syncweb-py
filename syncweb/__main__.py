@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-
+# PYTHON_ARGCOMPLETE_OK
 import argparse, os, sys
 from pathlib import Path
 
 from syncweb import cmd_utils
-from syncweb.cli import ArgparseList, SubParser
-from syncweb.find import cmd_find
+from syncweb.cli import STDIN_DASH, ArgparseArgsOrStdin, ArgparseList, SubParser
+from syncweb.cmds.devices import cmd_list_devices
+from syncweb.cmds.download import cmd_download
+from syncweb.cmds.find import cmd_find
+from syncweb.cmds.folders import cmd_list_folders
+from syncweb.cmds.ls import cmd_ls
+from syncweb.cmds.sort import cmd_sort
+from syncweb.cmds.stat import cmd_stat
 from syncweb.log_utils import log
-from syncweb.ls import cmd_ls
 from syncweb.syncweb import Syncweb
 
 __version__ = "0.0.1"
@@ -56,7 +61,7 @@ def cmd_init(args):
     print("Added", added, "folder" if added == 1 else "folders")
 
 
-def cmd_add(args):
+def cmd_join(args):
     added_devices, added_folders = args.st.cmd_add(args.urls)
     print("Added", added_devices, "device" if added_devices == 1 else "devices")
     print("Added", added_folders, "folder" if added_folders == 1 else "folders")
@@ -101,25 +106,23 @@ def cli():
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
 
-    folders = subparsers.add_parser(
-        "folders", aliases=["folder", "fo", "init", "in", "create"], help="Create a syncweb folder", func=cmd_init
+    create = subparsers.add_parser(
+        "create", aliases=["init", "in", "share"], help="Create a syncweb folder", func=cmd_init
     )
-    folders.add_argument("paths", nargs="*", default=".", help="Path to folder")
+    create.add_argument("paths", nargs="*", default=".", help="Path to folder")
 
-    devices = subparsers.add_parser(
-        "devices", aliases=["device", "de", "accept"], help="Add a device to syncweb", func=cmd_accept
-    )
-    devices.add_argument(
+    add = subparsers.add_parser("add", aliases=["accept"], help="Add a device to syncweb", func=cmd_accept)
+    add.add_argument(
         "device_ids",
         nargs="+",
         action=ArgparseList,
         help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
-    syncweb_urls = subparsers.add_parser(
-        "add", aliases=["import", "join", "clone"], help="Import syncweb folders/devices", func=cmd_add
+    join = subparsers.add_parser(
+        "join", aliases=["import", "clone"], help="Join syncweb folders/devices", func=cmd_join
     )
-    syncweb_urls.add_argument(
+    join.add_argument(
         "urls",
         nargs="+",
         action=ArgparseList,
@@ -131,6 +134,13 @@ def cli():
         Add a device and folder and mark a subfolder or file for immediate download
         syncweb://folder-id/subfolder/file#device-id
 """,
+    )
+
+    folders = subparsers.add_parser(
+        "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
+    )
+    devices = subparsers.add_parser(
+        "devices", aliases=["list-devices", "lsd"], help="List Syncthing devices", func=cmd_list_devices
     )
 
     pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
@@ -158,11 +168,13 @@ def cli():
         default=True,
         help="print sizes in human readable format",
     )
+    ls.add_argument(
+        "--folder-size", action=argparse.BooleanOptionalAction, default=True, help="Include accurate subfolder size"
+    )
     ls.add_argument("--show-all", "--all", "-a", action="store_true", help="do not ignore entries starting with .")
     ls.add_argument(
         "--depth", "-D", "--levels", type=int, default=0, metavar="N", help="descend N directory levels deep"
     )
-    ls.add_argument("--recursive", "-R", action="store_true", help="list subdirectories recursively")
     ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
     ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
 
@@ -172,17 +184,19 @@ def cli():
     find = subparsers.add_parser(
         "find", aliases=["fd", "search"], help="Search for files by filename, size, and modified date", func=cmd_find
     )
-    find.add_argument('--ignore-case', '-i', action='store_true', help='Case insensitive search')
-    find.add_argument('--case-sensitive', '-s', action='store_true', help='Case sensitive search')
-    find.add_argument('--hidden', '-H', action='store_true', help='Search hidden files and directories')
-    find.add_argument('--type', '-t', choices=['f', 'd'], help='Filter by type: f=file, d=directory')
-    find.add_argument('--follow-links', '-L', action='store_true', help='Follow symbolic links')
-    find.add_argument('--absolute-path', '-a', action='store_true', help='Print absolute paths')
+    find.add_argument("--ignore-case", "-i", action="store_true", help="Case insensitive search")
+    find.add_argument("--case-sensitive", "-s", action="store_true", help="Case sensitive search")
+    find.add_argument("--fixed-strings", "-F", action="store_true", help="Treat all patterns as literals")
+    find.add_argument("--glob", "-g", action="store_true", help="Glob-based search")
+    find.add_argument("--hidden", "-H", action="store_true", help="Search hidden files and directories")
+    find.add_argument("--type", "-t", choices=["f", "d"], help="Filter by type: f=file, d=directory")
+    find.add_argument("--follow-links", "-L", action="store_true", help="Follow symbolic links")
+    find.add_argument("--absolute-path", "-a", action="store_true", help="Print absolute paths")
     find.add_argument(
         "--depth",
         "-d",
         "--levels",
-        action='append',
+        action="append",
         default=["+0"],
         metavar="N",
         help="""Constrain files by file depth
@@ -223,24 +237,62 @@ def cli():
 --modified-before '3 years'""",
     )
     find.add_argument(
-            "--time-modified",
-            action="append",
-            default=[],
-            help="""Constrain media by time_modified (alternative syntax)
+        "--time-modified",
+        action="append",
+        default=[],
+        help="""Constrain media by time_modified (alternative syntax)
     --time-modified='-3 days' (newer than)
     --time-modified='+3 days' (older than)""",
     )
-    find.add_argument('pattern', nargs='?', default='.*', help='Search patterns (default: all files)')
-    find.add_argument('search_paths', nargs='*', help='Root directories to search')
+    find.add_argument("pattern", nargs="?", default=".*", help="Search patterns (default: all files)")
+    find.add_argument("search_paths", nargs="*", help="Root directories to search")
 
-    download = subparsers.add_parser("download", aliases=["dl"], help="Mark files as unignored for download")
-    download.add_argument("paths", nargs="+", help="Paths or globs of files to unignore")
-
-    autodownload = subparsers.add_parser(
-        "auto-download", aliases=["autodl"], help="Automatically download files based on size"
+    stat = subparsers.add_parser("stat", help="Display detailed file status information from Syncthing", func=cmd_stat)
+    stat.add_argument("--terse", "-t", action="store_true", help="Print information in terse form")
+    stat.add_argument(
+        "--format",
+        "-c",
+        metavar="FORMAT",
+        help="Use custom format (simplified: %%n=name, %%s=size, %%b=blocks, %%f=perms, %%F=type, %%y=mtime)",
     )
-    autodownload.add_argument("--min-size", type=int, default=0, help="Minimum file size (bytes)")
-    autodownload.add_argument("--max-size", type=int, default=None, help="Maximum file size (bytes)")
+    stat.add_argument(
+        "--dereference",
+        "-L",
+        action="store_true",
+        help="Follow symbolic links (placeholder for compatibility; does nothing)",
+    )
+    stat.add_argument("paths", nargs="+", help="Files or directories to stat")
+
+    sort = subparsers.add_parser("sort", help="Sort Syncthing files by multiple criteria", func=cmd_sort)
+    sort.add_argument(
+        "--sort",
+        "--sort-by",
+        "--by",
+        "-u",
+        default=[],
+        action=ArgparseList,
+        help="""Sort by popular, balanced, recent, size, frecency, or random.
+
+Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
+
+(default: "balanced,frecency")""",
+    )
+    sort.add_argument("paths", nargs="*", default=STDIN_DASH, action=ArgparseArgsOrStdin, help="File paths to sort")
+
+    download = subparsers.add_parser(
+        "download",
+        aliases=["dl", "upload", "unignore", "sync"],
+        help="Mark file paths for download/sync",
+        func=cmd_download,
+    )
+    download.add_argument("--depth", type=int, help="Maximum depth for directory traversal")
+    download.add_argument(
+        "paths",
+        nargs="*",
+        default=STDIN_DASH,
+        action=ArgparseArgsOrStdin,
+        help="File or directory paths to download (or read from stdin)",
+    )
 
     args = subparsers.parse()
 
@@ -255,6 +307,9 @@ def cli():
     log.info("%s", args.st.version["longVersion"])
     log.info("API %s", args.st.api_url)
     log.info("DATA %s", args.st.home_path)
+
+    if args.st.default_folder()["label"] != "Syncweb Default":
+        args.st.set_default_folder()
 
     return args.run()
 
