@@ -6,6 +6,14 @@
 >
 > Ted Nelson
 
+## Install
+
+Requires syncthing v2 to be installed in the PATH (or as a static binary in the same folder that you run syncweb commands in)
+
+```sh
+pip install syncweb
+```
+
 ## Usage
 
 Start your syncweb cluster by creating your first folder
@@ -47,9 +55,9 @@ d        3.2MiB  28 Jul  2022 Documentation/
 
 ```sh
 $ syncweb find --type=f --ext MKA --size=-20M --min-depth=2 Test
-audio/Recordings/TestRecording_1.opus
-audio/Recordings/TestRecording_22.opus
-audio/Recordings/TestRecording_23.opus
+audio/Recordings/TestRecording_1.mka
+audio/Recordings/TestRecording_22.mka
+audio/Recordings/TestRecording_23.mka
 ...
 
 # shorthand
@@ -60,9 +68,9 @@ $ syncweb find -tf -eMKA -S=-20M -d=+2 Test
 
 ```sh
 $ syncweb find -tf -eMKA -S=-20M -d=+2 Test | syncweb sort "balanced,frecency" | tee download_list.txt
-audio/Recordings/TestRecording_23.opus
-audio/Recordings/TestRecording_22.opus
-audio/Recordings/TestRecording_1.opus
+audio/Recordings/TestRecording_23.mka
+audio/Recordings/TestRecording_22.mka
+audio/Recordings/TestRecording_1.mka
 ```
 
 ### Download

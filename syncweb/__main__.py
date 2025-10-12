@@ -91,25 +91,11 @@ def cli():
     parser.add_argument("--no-confirm", "--yes", "-y", action="store_true")
 
     subparsers = SubParser(parser, default_command="help", version=__version__)
-    subparsers.add_parser("help", help="Show this help message", func=lambda a: subparsers.print_help())
-    subparsers.add_parser("version", help="Show Syncweb version", func=cmd_version)
-    subparsers.add_parser("repl", help="Talk to Syncthing API", func=lambda a: (self := a.st) and breakpoint())
-
-    subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
-    subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
 
     create = subparsers.add_parser(
         "create", aliases=["init", "in", "share"], help="Create a syncweb folder", func=cmd_init
     )
     create.add_argument("paths", nargs="*", default=".", help="Path to folder")
-
-    accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
-    accept.add_argument(
-        "device_ids",
-        nargs="+",
-        action=ArgparseList,
-        help="One or more Syncthing device IDs (space or comma-separated)",
-    )
 
     join = subparsers.add_parser(
         "join", aliases=["import", "clone"], help="Join syncweb folders/devices", func=cmd_join
@@ -126,6 +112,14 @@ def cli():
         Add a device and folder and mark a subfolder or file for immediate download
         syncweb://folder-id/subfolder/file#device-id
 """,
+    )
+
+    accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
+    accept.add_argument(
+        "device_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
     folders = subparsers.add_parser(
@@ -155,7 +149,7 @@ def cli():
         help="One or more Syncthing device IDs (space or comma-separated)",
     )
 
-    ls = subparsers.add_parser("list", aliases=["ls"], help="List files at the current directory level", func=cmd_ls)
+    ls = subparsers.add_parser("ls", aliases=["list"], help="List files at the current directory level", func=cmd_ls)
     ls.add_argument("--long", "-l", action="store_true", help="use long listing format")
     ls.add_argument(
         "--human-readable",
@@ -173,8 +167,7 @@ def cli():
     ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
     ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
 
-    subparsers.add_parser("cd", help="Change directory helper")
-    # TODO: add autocomplete via local metadata
+    # subparsers.add_parser("cd", help="Change directory helper")
 
     find = subparsers.add_parser(
         "find", aliases=["fd", "search"], help="Search for files by filename, size, and modified date", func=cmd_find
@@ -297,6 +290,13 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
         action=ArgparseArgsOrStdin,
         help="File or directory paths to download (or read from stdin)",
     )
+
+    subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
+    subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
+
+    subparsers.add_parser("repl", help="Talk to Syncthing API", func=lambda a: (self := a.st) and breakpoint())
+    subparsers.add_parser("version", help="Show Syncweb version", func=cmd_version)
+    subparsers.add_parser("help", help="Show this help message", func=lambda a: subparsers.print_help())
 
     args = subparsers.parse()
 
