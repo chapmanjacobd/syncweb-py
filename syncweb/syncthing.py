@@ -91,6 +91,7 @@ class SyncthingNodeXML:
         if testing:
             opts["globalAnnounceEnabled"] = "false"
             opts["relaysEnabled"] = "false"
+            opts["limitBandwidthInLan"] = "true"
             opts["maxSendKbps"] = "200"
             opts["maxRecvKbps"] = "200"
 
@@ -103,10 +104,14 @@ class SyncthingNodeXML:
         opts["autoUpgradeIntervalH"] = "0"
         opts["keepTemporariesH"] = "192"
         opts["progressUpdateIntervalS"] = "-1"
+
+        # TODO: evaluate performance difference
+        # opts["cacheIgnoredFiles"] = "true"
         # opts["maxFolderConcurrency"] = "8"
         # opts["maxConcurrentIncomingRequestKiB"] = "400000"
         # opts["connectionLimitEnough"] = "8000"
         # opts["connectionLimitMax"] = "80000"
+
         # opts["listenAddress"] = "default"  # will be randomly picked
         # opts["globalAnnounceServer"] = "default"
         # opts["localAnnounceEnabled"] = "true"
@@ -122,8 +127,6 @@ class SyncthingNodeXML:
         # opts["urURL"] = "https://data.syncthing.net/newdata"
         # opts["urPostInsecurely"] = "false"
         # opts["upgradeToPreReleases"] = "false"
-        # opts["cacheIgnoredFiles"] = "true"  # TODO: evaluate performance difference
-        # opts["limitBandwidthInLan"] = "false"
         # opts["minHomeDiskFree"] = {"@unit": "%", "#text": "1"}
         # opts["releasesURL"] = "https://upgrades.syncthing.net/meta.json"
         # opts["overwriteRemoteDeviceNamesOnConnect"] = "false"
@@ -171,7 +174,7 @@ class SyncthingNodeXML:
             device["remoteGUIPort"] = "0"
             device["numConnections"] = "0"
 
-    def xml_add_folder(self, folder_id, peer_ids, folder_type="sendreceive", folder_label=None, prefix=None):
+    def xml_add_folder(self, folder_id, peer_ids, folder_type="sendreceive", folder_label=None, prefix=None, path=None):
         is_fakefs = prefix and prefix.startswith("fake")
 
         if is_fakefs and prefix:
@@ -393,9 +396,7 @@ class SyncthingNode(SyncthingNodeXML):
         errors = []
         while time.time() < deadline:
             try:
-                r = self.session.get("system/connections")
-                r.raise_for_status()
-                data = r.json()
+                data = self._get("system/connections")
                 for _dev, info in data.get("connections", {}).items():
                     if info.get("connected"):
                         return True

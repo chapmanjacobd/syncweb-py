@@ -6,7 +6,7 @@ import pytest
 import tests.db as db
 import tests.fstree as fstree
 from syncweb.cmd_utils import cmd
-from syncweb.syncthing import SyncthingCluster
+from syncweb.syncthing import SyncthingCluster, SyncthingNode
 
 
 def test_rw_rw_copy():
@@ -86,6 +86,39 @@ def test_malicious_node():
             fstree.check({"test.txt": "good world"}, r.local / cluster.folder_id)
         # Syncthing will not prevent other nodes from writing
         # https://github.com/syncthing/syncthing/issues/10420
+
+
+def test_malicious_node2():
+    # 2 writers, 1 reader using the same folder for read and write
+    # keeping everything sendonly but using receiveonly only for receiving from known sources
+    writer = SyncthingNode("writer")
+    reader = SyncthingNode("reader")
+    mal = SyncthingNode("mal")
+
+    nodes = (writer, reader, mal)
+    device_ids = [st.device_id for st in nodes]
+    for st in nodes:
+        st.xml_add_devices(device_ids)
+    send_fid = "send"
+    [st.xml_add_folder(send_fid, device_ids, folder_type="readwrite" if st == mal else "sendonly") for st in nodes]
+    [st.start() for st in nodes]
+    [st.wait_for_node(timeout=60) for st in nodes]
+
+    read_fid = "read"
+    for st in [writer, reader]:
+        # we only link a receiveonly folder with the known good source
+        st.add_folder(
+            id=read_fid,
+            path=str(st.local / send_fid),
+            type="receiveonly" if st == reader else "sendonly",
+            devices=[{'deviceID': st.device_id} for st in [writer, reader]],
+        )
+
+    fstree.write({"test.txt": "good world"}, writer.local / send_fid)
+    fstree.write({"test.txt": "bad world"}, mal.local / send_fid)
+
+    db.check(reader, reader.local / read_fid, ["test.txt"])
+    fstree.check({"test.txt": "good world"}, reader.local / send_fid)
 
 
 def test_w_r_r_blocks_across_folders():
