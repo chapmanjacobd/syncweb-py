@@ -1,5 +1,6 @@
 import shutil
 from pathlib import Path
+from time import sleep
 
 import pytest
 
@@ -14,11 +15,11 @@ def test_rw_rw_copy():
         cluster.wait_for_connection()
         rw1, rw2 = cluster
 
-        fstree.write({"test.txt": "hello world"}, rw1.local / cluster.folder_id)
-        fstree.check({"test.txt": "hello world"}, rw2.local / cluster.folder_id)
+        fstree.write({"test.txt": "hello world"}, rw1.home / "data" / cluster.folder_id)
+        fstree.check({"test.txt": "hello world"}, rw2.home / "data" / cluster.folder_id)
 
-        fstree.write({"test2.txt": "hello morld"}, rw2.local / cluster.folder_id)
-        fstree.check({"test2.txt": "hello morld"}, rw1.local / cluster.folder_id)
+        fstree.write({"test2.txt": "hello morld"}, rw2.home / "data" / cluster.folder_id)
+        fstree.check({"test2.txt": "hello morld"}, rw1.home / "data" / cluster.folder_id)
 
         # cluster.inspect()
         # breakpoint()
@@ -34,8 +35,8 @@ def test_w_r_move():
         r.xml_update_config()
 
         source_fstree = {"test.txt": "hello world"}
-        fstree.write(source_fstree, w.local / cluster.folder_id)
-        fstree.check(source_fstree, r.local / cluster.folder_id)
+        fstree.write(source_fstree, w.home / "data" / cluster.folder_id)
+        fstree.check(source_fstree, r.home / "data" / cluster.folder_id)
 
         cmd(
             "syncthing_send.py",
@@ -43,11 +44,11 @@ def test_w_r_move():
             "--timeout=30s",
             f"--port={w.api_url.split(":")[-1]}",
             f"--api-key={w.api_key}",
-            w.local / cluster.folder_id,
+            w.home / "data" / cluster.folder_id,
             strict=False,
         )
-        assert fstree.read(Path(w.local / cluster.folder_id)) == {}
-        assert fstree.read(Path(r.local / cluster.folder_id)) == source_fstree
+        assert fstree.read(Path(w.home / "data" / cluster.folder_id)) == {}
+        assert fstree.read(Path(r.home / "data" / cluster.folder_id)) == source_fstree
 
 
 def test_w_r_r():
@@ -57,14 +58,14 @@ def test_w_r_r():
 
         r2.stop()
 
-        fstree.write({"test.txt": "hello world"}, w.local / cluster.folder_id)
-        fstree.check({"test.txt": "hello world"}, r1.local / cluster.folder_id)
+        fstree.write({"test.txt": "hello world"}, w.home / "data" / cluster.folder_id)
+        fstree.check({"test.txt": "hello world"}, r1.home / "data" / cluster.folder_id)
 
         # let's check that r2 can get a file from r1
         w.stop()
         r2.start()
 
-        fstree.check({"test.txt": "hello world"}, r2.local / cluster.folder_id)
+        fstree.check({"test.txt": "hello world"}, r2.home / "data" / cluster.folder_id)
 
 
 def test_malicious_node():
@@ -73,17 +74,17 @@ def test_malicious_node():
         w, r, mal = cluster
 
         r.set_ignores(cluster.folder_id, ["test.txt"])
-        fstree.write({"test.txt": "good world"}, w.local / cluster.folder_id)
-        db.check(r, r.local / cluster.folder_id, ["test.txt"])
+        fstree.write({"test.txt": "good world"}, w.home / "data" / cluster.folder_id)
+        db.check(r, r.home / "data" / cluster.folder_id, ["test.txt"])
         w.stop()
 
-        fstree.write({"test.txt": "bad world"}, mal.local / cluster.folder_id)
+        fstree.write({"test.txt": "bad world"}, mal.home / "data" / cluster.folder_id)
         r.set_ignores(cluster.folder_id, [])
-        fstree.check({"test.txt": "bad world"}, r.local / cluster.folder_id)
+        fstree.check({"test.txt": "bad world"}, r.home / "data" / cluster.folder_id)
         w.start()
 
         with pytest.raises(ValueError):
-            fstree.check({"test.txt": "good world"}, r.local / cluster.folder_id)
+            fstree.check({"test.txt": "good world"}, r.home / "data" / cluster.folder_id)
         # Syncthing will not prevent other nodes from writing
         # https://github.com/syncthing/syncthing/issues/10420
 
@@ -93,32 +94,45 @@ def test_malicious_node2():
     # keeping everything sendonly but using receiveonly only for receiving from known sources
     writer = SyncthingNode("writer")
     reader = SyncthingNode("reader")
+    reader2 = SyncthingNode("reader2")
     mal = SyncthingNode("mal")
 
-    nodes = (writer, reader, mal)
+    nodes = (writer, reader, reader2, mal)
     device_ids = [st.device_id for st in nodes]
     for st in nodes:
         st.xml_add_devices(device_ids)
+
     send_fid = "send"
     [st.xml_add_folder(send_fid, device_ids, folder_type="readwrite" if st == mal else "sendonly") for st in nodes]
     [st.start() for st in nodes]
     [st.wait_for_node(timeout=60) for st in nodes]
 
     read_fid = "read"
-    for st in [writer, reader]:
+    writer.add_folder(id=read_fid, path=str(writer.home / "data" / send_fid), type="sendonly")
+    for read_node in [reader, reader2, mal]:
         # we only link a receiveonly folder with the known good source
-        st.add_folder(
-            id=read_fid,
-            path=str(st.local / send_fid),
-            type="receiveonly" if st == reader else "sendonly",
-            devices=[{'deviceID': st.device_id} for st in [writer, reader]],
-        )
+        read_node.add_folder(id=read_fid, path=str(read_node.home / "data" / send_fid), type="receiveonly")
+        read_node.add_folder_devices(read_fid, [st.device_id for st in [writer, read_node]])
+        # add same devices to writer read_fid folder
+        writer.add_folder_devices(read_fid, [st.device_id for st in [writer, read_node]])
 
-    fstree.write({"test.txt": "good world"}, writer.local / send_fid)
-    fstree.write({"test.txt": "bad world"}, mal.local / send_fid)
+    reader2.stop()
 
-    db.check(reader, reader.local / read_fid, ["test.txt"])
-    fstree.check({"test.txt": "good world"}, reader.local / send_fid)
+    fstree.write({"test.txt": "good world"}, writer.home / "data" / send_fid)
+    fstree.write({"test.txt": "bad world"}, mal.home / "data" / send_fid)
+
+    db.check(reader, read_fid, ["test.txt"])
+    fstree.check({"test.txt": "good world"}, reader.home / "data" / send_fid)
+    # good but it seems dependent on the specific writer node(s), so kind of useless
+
+    writer.stop()
+    reader2.start()
+    reader2.wait_for_node(timeout=60)
+
+    db.check(reader2, read_fid, ["test.txt"])
+    with pytest.raises(TimeoutError):
+        fstree.check({"test.txt": "good world"}, reader2.home / "data" / send_fid)
+    # blocks really aren't shared between folders, I guess!
 
 
 def test_w_r_r_blocks_across_folders():
@@ -134,17 +148,17 @@ def test_w_r_r_blocks_across_folders():
     r2.stop()
 
     r1.set_ignores(folder2, ["test.txt"])
-    fstree.write({"test.txt": "hello world"}, w.local / folder1)
-    fstree.write({"test.txt": "hello world"}, w.local / folder2)
+    fstree.write({"test.txt": "hello world"}, w.home / "data" / folder1)
+    fstree.write({"test.txt": "hello world"}, w.home / "data" / folder2)
 
-    fstree.check({"test.txt": "hello world"}, r1.local / folder1)
-    fstree.check({}, r1.local / folder2)
+    fstree.check({"test.txt": "hello world"}, r1.home / "data" / folder1)
+    fstree.check({}, r1.home / "data" / folder2)
     w.stop()
 
     r1.set_ignores(folder2, [])
     r2.start()
     with pytest.raises(TimeoutError):
-        fstree.check({"test.txt": "hello world"}, r2.local / folder2)
+        fstree.check({"test.txt": "hello world"}, r2.home / "data" / folder2)
     # Syncthing does not share blocks between folders
 
     for st in cluster.nodes:

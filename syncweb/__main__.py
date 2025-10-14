@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# PYTHON_ARGCOMPLETE_OK
 import argparse, os, sys
 from pathlib import Path
 
@@ -303,14 +302,13 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
     log.info("Syncweb v%s :: %s", __version__, os.path.realpath(sys.path[0]))
     if args.home is None:
         args.home = cmd_utils.default_state_dir("syncweb")
-        log.debug("syncweb --home not set; using %s", args.home)
 
     args.st = Syncweb(name="syncweb", base_dir=args.home)
     args.st.start(daemonize=True)
     args.st.wait_for_pong()
     log.info("%s", args.st.version["longVersion"])
     log.info("API %s", args.st.api_url)
-    log.info("DATA %s", args.st.home_path)
+    log.info("DATA %s", args.st.home)
 
     if args.st.default_folder()["label"] != "Syncweb Default":
         args.st.set_default_folder()

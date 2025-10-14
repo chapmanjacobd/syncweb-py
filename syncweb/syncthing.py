@@ -1,3 +1,4 @@
+from contextlib import suppress
 import os, shutil, socket, subprocess, sys, tempfile, time
 from functools import cached_property
 from pathlib import Path
@@ -23,21 +24,21 @@ class SyncthingNodeXML:
         self.process: subprocess.Popen
         self.sync_port: int
         self.discovery_port: int
-        self.local: Path
 
         if base_dir is None:
             base_dir = tempfile.mkdtemp(prefix="syncthing-node-")
-        self.home_path = Path(base_dir)
-        self.home_path.mkdir(parents=True, exist_ok=True)
-        self.config_path = self.home_path / "config.xml"
+            log.info("Using home %s", base_dir)
+        self.home = Path(base_dir)
+        self.home.mkdir(parents=True, exist_ok=True)
+        self.config_path = self.home / "config.xml"
 
         if not self.config_path.exists():
-            cmd(self.syncthing_exe, f"--home={self.home_path}", "generate")
+            cmd(self.syncthing_exe, f"--home={self.home}", "generate")
 
         self.config = ConfigXML(self.config_path)
         self.xml_set_default_config(PYTEST_RUNNING)
 
-        lock_path = self.home_path / "syncthing.lock"
+        lock_path = self.home / "syncthing.lock"
         self.running: bool = lock_path.exists()
         if self.running:
             log.debug("Found lockfile, is a Syncweb instance already running? %s", lock_path)
@@ -92,8 +93,8 @@ class SyncthingNodeXML:
             opts["globalAnnounceEnabled"] = "false"
             opts["relaysEnabled"] = "false"
             opts["limitBandwidthInLan"] = "true"
-            opts["maxSendKbps"] = "200"
-            opts["maxRecvKbps"] = "200"
+            opts["maxSendKbps"] = "20"
+            opts["maxRecvKbps"] = "20"
 
         opts["startBrowser"] = "false"
         # disable Anonymous Usage Statistics
@@ -178,14 +179,12 @@ class SyncthingNodeXML:
         is_fakefs = prefix and prefix.startswith("fake")
 
         if is_fakefs and prefix:
-            self.local = Path(prefix)
-        elif prefix:
-            self.local = Path(prefix) / self.name
+            path = Path(prefix) / folder_id
         else:
-            self.local = self.home_path / self.name
+            path = Path(prefix or self.home) / self.name / folder_id
 
         if not is_fakefs:
-            (self.local / folder_id).mkdir(parents=True, exist_ok=True)
+            path.mkdir(parents=True, exist_ok=True)
 
         if folder_label is None:
             folder_label = "SharedFolder"
@@ -195,7 +194,7 @@ class SyncthingNodeXML:
             attrib={
                 "id": folder_id,
                 "label": folder_label,
-                "path": prefix if is_fakefs else str(self.local / folder_id),
+                "path": prefix if is_fakefs else str(path),
                 "type": ROLE_TO_TYPE.get(folder_type, folder_type),
                 "rescanIntervalS": "3600",
                 "fsWatcherEnabled": "false" if is_fakefs else "true",
@@ -269,9 +268,11 @@ class SyncthingNodeXML:
 
     def start(self, daemonize=False):
         if self.running:
+            log.warning("[START]: %s self.running already set", self.name)
             return
         if getattr(self, "process", False) and self.process.poll() is None:
             self.running = True
+            log.warning("[START]: %s process already running", self.name)
             return
 
         gui_port = self.find_free_port(8384)
@@ -281,7 +282,7 @@ class SyncthingNodeXML:
 
         self.xml_update_config()
 
-        cmd = [self.syncthing_exe, f"--home={self.home_path}", "--no-browser", "--no-upgrade", "--no-restart"]
+        cmd = [self.syncthing_exe, f"--home={self.home}", "--no-browser", "--no-upgrade", "--no-restart"]
 
         if daemonize:
             z = subprocess.DEVNULL
@@ -291,9 +292,13 @@ class SyncthingNodeXML:
         # Give Syncthing a moment
         time.sleep(0.5)
         self.running = True
+        log.debug("[START]: %s started", self.name)
 
     def stop(self):
+        self.running = False
+
         if not getattr(self, "process", None):
+            log.warning("[STOP]: %s was daemonized? It seems outside of our control", self.name)
             return
 
         if self.process.poll() is None:
@@ -303,22 +308,21 @@ class SyncthingNodeXML:
             except subprocess.TimeoutExpired:
                 self.process.kill()
         else:
-            print(self.name, "exited already")
+            log.warning("[STOP]: %s exited already", self.name)
 
         if self.process.stdout and not self.process.stdout.closed:
             self.log()
-
-        self.running = False
+        log.debug("[STOP]: %s stopped", self.name)
 
     def log(self):
         r = Pclose(self.process)
 
         if r.returncode != 0:
-            print(self.name, "exited", r.returncode)
+            log.info(self.name, "exited", r.returncode)
         if r.stdout:
-            print(r.stdout)
+            log.info(r.stdout)
         if r.stderr:
-            print(r.stderr, file=sys.stderr)
+            log.info(r.stderr)
 
     @property
     def api_url(self):
@@ -328,7 +332,11 @@ class SyncthingNodeXML:
         resp = self.session.get(f"{self.api_url}/rest/{path}", **kwargs)
         if resp.text:
             log.debug(resp.text)
-        resp.raise_for_status()
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s %s", path, kwargs)
+            return {}
+        else:
+            resp.raise_for_status()
         return resp.json()
 
     def wait_for_pong(self, timeout: float = 30.0):
@@ -358,21 +366,33 @@ class SyncthingNodeXML:
         resp = self.session.put(f"{self.api_url}/rest/{path}", **kwargs)
         if resp.text:
             log.debug(resp.text)
-        resp.raise_for_status()
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s %s", path, kwargs)
+            return {}
+        else:
+            resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _post(self, path, json=None, **kwargs):
         resp = self.session.post(f"{self.api_url}/rest/{path}", json=json, **kwargs)
         if resp.text:
             log.debug(resp.text)
-        resp.raise_for_status()
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s %s", path, kwargs)
+            return {}
+        else:
+            resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _patch(self, path, **kwargs):
         resp = self.session.patch(f"{self.api_url}/rest/{path}", **kwargs)
         if resp.text:
             log.debug(resp.text)
-        resp.raise_for_status()
+        if resp.status_code == 404:
+            log.warning("404 Not Found %s %s", path, kwargs)
+            return {}
+        else:
+            resp.raise_for_status()
         return resp.json() if resp.text else None
 
     def _delete(self, path, **kwargs):
@@ -404,9 +424,9 @@ class SyncthingNode(SyncthingNodeXML):
                 errors.append(e)
             time.sleep(2)
 
-        print(f"Timed out waiting for {self.name} device to connect on", self.api_url, file=sys.stderr)
+        log.error(f"Timed out waiting for %s device to connect on %s", self.name, self.api_url)
         for error in errors:
-            print(error, file=sys.stderr)
+            log.warning(error)
         raise TimeoutError
 
     def shutdown(self):
@@ -560,8 +580,26 @@ class SyncthingNode(SyncthingNodeXML):
         if "label" not in kwargs:
             kwargs["label"] = None
 
+        existing_folder = self.folder(kwargs["id"])
+        if existing_folder:
+            log.info("Folder id %s already added", kwargs["id"])
+            return
+
         kwargs = self.default_folder() | kwargs
         return self._post("config/folders", json=kwargs)
+
+    def add_folder_devices(self, folder_id: str, device_ids: list[str]):
+        existing_folder = self.folder(folder_id)
+
+        existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices") or []}
+        new_devices = [{"deviceID": d} for d in device_ids if d not in existing_device_ids]
+        if not new_devices:
+            log.info(f"[%s] Folder '%s' already available to all requested devices", folder_id, self.name)
+            return
+
+        existing_folder["devices"].extend(new_devices)
+        log.debug(f"[%s] Patching '%s' with %s new devices", folder_id, self.name, len(new_devices))
+        self._patch(f"config/folders/{folder_id}", json=existing_folder)
 
     def delete_folder(self, folder_id: str):
         return self._delete(f"config/folders/{folder_id}")
@@ -708,7 +746,7 @@ class SyncthingCluster:
         for node in self.nodes:
             print("###", node.name)
             print("open", node.api_url)
-            print("ls", node.local)
+            print("ls", node.home)
             print()
 
     def __iter__(self):

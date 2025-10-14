@@ -79,7 +79,7 @@ class Syncweb(SyncthingNode):
                     folder_count += 1
 
                 if ref.device_id:
-                    self.join_folder(ref.folder_id, [ref.device_id])
+                    self.add_folder_devices(ref.folder_id, [ref.device_id])
 
                 if ref.subpath:
                     # TODO: ask to confirm if ref.subpath == "/" ?
@@ -190,30 +190,17 @@ class Syncweb(SyncthingNode):
                 continue
 
             if fid in existing_folder_ids:  # folder exists; just add new devices
-                self.join_folder(fid, device_ids)
+                self.add_folder_devices(fid, device_ids)
             else:  # folder doesn't exist; create it (with devices)
                 log.info(f"[%s] Creating folder '%s'", self.name, fid)
                 cfg = {
                     "id": fid,
                     "label": fid,
-                    "path": str(self.home_path / fid),
+                    "path": str(self.home / fid),
                     "type": "receiveonly",  # TODO: think
                     "devices": [{"deviceID": d} for d in device_ids],
                 }
                 self._post("config/folders", json=cfg)
-
-    def join_folder(self, folder_id: str, device_ids: list[str]):
-        existing_folder = self.folder(folder_id)
-
-        existing_device_ids = {dd["deviceID"] for dd in existing_folder.get("devices") or []}
-        new_devices = [{"deviceID": d} for d in device_ids if d not in existing_device_ids]
-        if not new_devices:
-            log.info(f"[%s] Folder '%s' already available to all requested devices", folder_id, self.name)
-            return
-
-        existing_folder["devices"].extend(new_devices)
-        log.debug(f"[%s] Patching '%s' with %s new devices", folder_id, self.name, len(new_devices))
-        self._patch(f"config/folders/{folder_id}", json=existing_folder)
 
     def _is_ignored(self, rel_path: Path, patterns: list[str]) -> bool:
         s = str(rel_path)
