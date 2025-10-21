@@ -7,15 +7,6 @@ from syncweb.syncthing import SyncthingNode
 
 
 class Syncweb(SyncthingNode):
-    def create_folder_id(self, path):
-        existing_folders = set(self.folder_stats().keys())
-
-        name = str_utils.basename(path)
-        if name not in existing_folders:
-            return name
-
-        return str_utils.path_hash(path)
-
     def cmd_accept(self, device_ids):
         device_count = 0
         for path in device_ids:
@@ -58,6 +49,15 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
+    def create_folder_id(self, path):
+        existing_folders = set(self.folder_stats().keys())
+
+        name = str_utils.basename(path)
+        if name not in existing_folders:
+            return name
+
+        return str_utils.path_hash(path)
+
     def cmd_join(self, urls, decode=True):
         device_count, folder_count = 0, 0
         for url in urls:
@@ -94,8 +94,8 @@ class Syncweb(SyncthingNode):
             os.makedirs(path, exist_ok=True)
 
             folder_id = self.create_folder_id(path)
-            self.add_folder(id=folder_id, path=path, type="sendonly")
-            self.set_ignores(folder_id)
+            self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="sendonly")
+            self.set_ignores(folder_id, lines=[])
             print(f"sync://{folder_id}#{self.device_id}")
             folder_count += 1
         return folder_count
