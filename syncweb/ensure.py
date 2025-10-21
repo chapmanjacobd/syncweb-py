@@ -133,8 +133,9 @@ def verify_checksum(sha_file, archive_name, archive_path):
 
 def atomic_replace(src_path, dest_path):
     dest_dir = os.path.dirname(dest_path)
-    _fd, tmp_dest_path = tempfile.mkstemp(dir=dest_dir)
+    tmp_fd, tmp_dest_path = tempfile.mkstemp(dir=dest_dir)
     shutil.copy2(src_path, tmp_dest_path)
+    os.close(tmp_fd)
     os.replace(tmp_dest_path, dest_path)
     os.unlink(src_path)
 
