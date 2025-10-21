@@ -52,18 +52,18 @@ def cmd_resume(args):
 
 def cmd_accept(args):
     added = args.st.cmd_accept(args.device_ids)
-    log.info("Added", added, "device" if added == 1 else "devices")
+    log.info("Added %s %s", added, "device" if added == 1 else "devices")
 
 
 def cmd_init(args):
     added = args.st.cmd_init(args.paths)
-    log.info("Added", added, "folder" if added == 1 else "folders")
+    log.info("Added %s %s", added, "folder" if added == 1 else "folders")
 
 
 def cmd_join(args):
-    added_devices, added_folders = args.st.cmd_add(args.urls)
-    log.info("Added", added_devices, "device" if added_devices == 1 else "devices")
-    log.info("Added", added_folders, "folder" if added_folders == 1 else "folders")
+    added_devices, added_folders = args.st.cmd_join(args.urls, prefix=args.prefix, decode=args.decode)
+    log.info("Added %s %s", added_devices, "device" if added_devices == 1 else "devices")
+    log.info("Added %s %s", added_folders, "folder" if added_folders == 1 else "folders")
     print("Local Device ID:", args.st.device_id)
 
 
@@ -112,6 +112,7 @@ def cli():
         syncweb://folder-id/subfolder/file#device-id
 """,
     )
+    join.add_argument("--prefix", default=".", help="Path to parent folder")
 
     accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
     accept.add_argument(
@@ -124,12 +125,19 @@ def cli():
     folders = subparsers.add_parser(
         "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
     )
+    folders.add_argument("--pending", "--unknown", action="store_true", help="Only show pending folders")
+    folders.add_argument("--accepted", "--known", action="store_true", help="Only show accepted folders")
+    folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
+
     devices = subparsers.add_parser(
         "devices", aliases=["list-devices", "lsd"], help="List Syncthing devices", func=cmd_list_devices
     )
     devices.add_argument(
         "--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics"
     )
+    devices.add_argument("--pending", "--unknown", action="store_true", help="Only show pending devices")
+    devices.add_argument("--accepted", "--known", action="store_true", help="Only show accepted devices")
+    devices.add_argument("--accept", action="store_true", help="Accept pending devices")
 
     pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
     pause.add_argument("--all", "-a", action="store_true", help="All devices")

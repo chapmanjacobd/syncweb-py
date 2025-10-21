@@ -324,7 +324,7 @@ class SyncthingNodeXML:
         if resp.text:
             log.debug(resp.text)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s %s", path, kwargs)
+            log.info("404 Not Found %s %s", path, kwargs)
             return {}
         else:
             resp.raise_for_status()
@@ -358,7 +358,7 @@ class SyncthingNodeXML:
         if resp.text:
             log.debug(resp.text)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s %s", path, kwargs)
+            log.info("404 Not Found %s %s", path, kwargs)
             return {}
         else:
             resp.raise_for_status()
@@ -369,7 +369,7 @@ class SyncthingNodeXML:
         if resp.text:
             log.debug(resp.text)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s %s", path, kwargs)
+            log.info("404 Not Found %s %s", path, kwargs)
             return {}
         else:
             resp.raise_for_status()
@@ -380,7 +380,7 @@ class SyncthingNodeXML:
         if resp.text:
             log.debug(resp.text)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s %s", path, kwargs)
+            log.info("404 Not Found %s %s", path, kwargs)
             return {}
         else:
             resp.raise_for_status()
@@ -391,7 +391,7 @@ class SyncthingNodeXML:
         if resp.text:
             log.debug(resp.text)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s", path)
+            log.info("404 Not Found %s", path)
         else:
             resp.raise_for_status()
         return resp
@@ -500,6 +500,9 @@ class SyncthingNode(SyncthingNodeXML):
     def delete_device(self, device_id: str):
         return self._delete(f"config/devices/{device_id}")
 
+    def delete_pending_device(self, device_id: str):
+        return self._delete(f"cluster/pending/devices", params={"device": device_id})
+
     def device_stats(self):
         return self._get("stats/device")
 
@@ -534,7 +537,6 @@ class SyncthingNode(SyncthingNodeXML):
     def set_default_folder(self, **folder):
         default_folder = self.default_folder()
         default_folder["name"] = "default"
-        default_folder["label"] = "Syncweb Default"
         default_folder["path"] = os.path.realpath(".")
         default_folder["rescanIntervalS"] = 7200
         default_folder["fsWatcherDelayS"] = 5
@@ -567,6 +569,15 @@ class SyncthingNode(SyncthingNodeXML):
     def folders(self):
         return self._get("config/folders")
 
+    def pending_folders(self, device_id=None):
+        params = {}
+        if device_id is not None:  # filter response to only folders offered from specific device
+            params["device"] = device_id
+        return self._get("cluster/pending/folders", params=params)
+
+    def pending_devices(self):
+        return self._get("cluster/pending/devices")
+
     def add_folder(self, **kwargs):
         if "label" not in kwargs:
             kwargs["label"] = None
@@ -595,6 +606,12 @@ class SyncthingNode(SyncthingNodeXML):
     def delete_folder(self, folder_id: str):
         return self._delete(f"config/folders/{folder_id}")
 
+    def delete_pending_folder(self, folder_id: str, device_id=None):
+        params = {"folder": folder_id}
+        if device_id is not None:  # ignore folder announcements from specific device
+            params["device"] = device_id
+        return self._delete(f"cluster/pending/folders", params=params)
+
     def reset_folder(self, folder_id: str | None = None):
         params = {}
         if folder_id:  # when omitted resets whole DB
@@ -618,7 +635,7 @@ class SyncthingNode(SyncthingNodeXML):
 
         resp = self.session.get(f"{self.api_url}/rest/db/file", params=params)
         if resp.status_code == 404:
-            log.warning("404 Not Found %s", relative_path)
+            log.info("404 Not Found %s", relative_path)
             return
         else:
             resp.raise_for_status()

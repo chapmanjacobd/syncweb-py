@@ -58,7 +58,20 @@ class Syncweb(SyncthingNode):
 
         return str_utils.path_hash(path)
 
-    def cmd_join(self, urls, decode=True):
+    def cmd_init(self, paths):
+        folder_count = 0
+        for path in paths:
+            os.makedirs(path, exist_ok=True)
+            path = os.path.realpath(path)
+
+            folder_id = self.create_folder_id(path)
+            self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="sendonly")
+            self.set_ignores(folder_id, lines=[])
+            print(f"sync://{folder_id}#{self.device_id}")
+            folder_count += 1
+        return folder_count
+
+    def cmd_join(self, urls, prefix=".", decode=True):
         device_count, folder_count = 0, 0
         for url in urls:
             ref = str_utils.parse_syncweb_path(url, decode=decode)
@@ -67,7 +80,7 @@ class Syncweb(SyncthingNode):
                 device_count += 1
 
             if ref.folder_id:
-                default_path = os.path.realpath(".")
+                default_path = os.path.realpath(prefix)
                 path = os.path.join(default_path, ref.folder_id)
                 os.makedirs(path, exist_ok=True)
 
@@ -88,23 +101,11 @@ class Syncweb(SyncthingNode):
 
         return device_count, folder_count
 
-    def cmd_init(self, paths):
-        folder_count = 0
-        for path in paths:
-            os.makedirs(path, exist_ok=True)
-
-            folder_id = self.create_folder_id(path)
-            self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="sendonly")
-            self.set_ignores(folder_id, lines=[])
-            print(f"sync://{folder_id}#{self.device_id}")
-            folder_count += 1
-        return folder_count
-
-    def add_ignores(self, folder_id: str, exclusions: list[str]):
+    def add_ignores(self, folder_id: str, unignores: list[str]):
         existing = set(s for s in self.ignores(folder_id)["ignore"] if not s.startswith("// Syncweb-managed"))
 
         new = set()
-        for p in exclusions:
+        for p in unignores:
             if p.startswith("//"):
                 continue
             if not p.startswith("!/"):
@@ -140,12 +141,12 @@ class Syncweb(SyncthingNode):
             return f"{short}-???????"
 
     def accept_pending_devices(self):
-        pending = self._get("cluster/pending/devices")
+        pending = self.pending_devices()
         if not pending:
             log.info(f"[%s] No pending devices", self.name)
             return
 
-        existing_devices = self._get("config/devices")
+        existing_devices = self.devices()
         existing_device_ids = {d["deviceID"] for d in existing_devices}
 
         for dev_id, info in pending.items():
@@ -164,9 +165,8 @@ class Syncweb(SyncthingNode):
             }
             self._put(f"config/devices/{dev_id}", json=cfg)
 
-    # TODO: break down more composable
-    def accept_pending_folders(self, folder_id: str | None = None):
-        pending = self._get("cluster/pending/folders")
+    def join_pending_folders(self, folder_id: str | None = None):
+        pending = self.pending_folders()
         if not pending:
             log.info(f"[%s] No pending folders", self.name)
             return
@@ -176,7 +176,7 @@ class Syncweb(SyncthingNode):
                 log.info(f"[%s] No pending folders matching '%s'", self.name, folder_id)
                 return
 
-        existing_folders = self._get("config/folders")
+        existing_folders = self.folders()
         existing_folder_ids = {f["id"]: f for f in existing_folders}
         pending = [f for f in pending if f.get("id") not in existing_folder_ids]
 

@@ -27,12 +27,21 @@ def _calc_rate(prev, curr, dt):
 
 
 def cmd_list_devices(args):
-    devices = args.st.devices()
+    devices = []
+    if not args.pending:
+        devices.extend(args.st.devices())
+    if not args.accepted:
+        devices.extend(
+            [{"deviceID": device_id, **d, "pending": True} for device_id, d in args.st.pending_devices().items()]
+        )
     device_stats = args.st.device_stats()
 
     if not devices:
         log.info("No devices configured")
         return
+
+    if args.accept:
+        args.st.accept_pending_devices()
 
     conn_before = args.st._get("system/connections")
 
@@ -61,15 +70,20 @@ def cmd_list_devices(args):
     for device in devices:
         device_id = device.get("deviceID")
         is_local = device_id == args.st.device_id
-        if is_local:
-            continue
 
         name = device.get("name", "<no name>")
-        paused = device.get("paused", False)
+        paused = device.get("paused") or False
+        pending = device.get("pending") or False
 
-        device_stat = device_stats[device_id]
-        last_seen = device_stat["lastSeen"]
-        last_duration = device_stat["lastConnectionDurationS"]
+        device_stat = device_stats.get(device_id)
+        if device_stat:
+            last_seen = device_stat["lastSeen"]
+            last_seen = str_utils.isodate2seconds(last_seen)
+            last_duration = device_stat["lastConnectionDurationS"]
+        else:  # pending device
+            last_seen = device.get("time")
+            last_seen = str_utils.isodate2seconds(last_seen)
+            last_duration = 0
 
         # Bandwidth limits
         max_send = device.get("maxSendKbps", 0)
@@ -84,17 +98,21 @@ def cmd_list_devices(args):
         conn_b = connections_before.get(device_id)
         conn_a = connections_after.get(device_id)
 
-        if conn_a and conn_a.get("connected"):
-            status = "●"
+        if is_local:
+            status = "🏠"
         elif paused:
-            status = "⏸"
+            status = "⏸️"
+        elif pending:
+            status = "💬"
+        elif conn_a and conn_a.get("connected"):
+            status = "🌐"
         else:
-            status = "◌"
+            status = "😴"
 
         row = [
             device_id,
             name,
-            status + " " + str_utils.relative_datetime(str_utils.isodate2seconds(last_seen)),
+            status + " " + str_utils.relative_datetime(last_seen),
             str_utils.duration_short(last_duration),
             bandwidth_str,
         ]
@@ -121,7 +139,6 @@ def cmd_list_devices(args):
 
     print(tabulate(table_data, headers=headers, tablefmt="simple"))
 
-    print(f"\nTotal devices: {len(devices) - 1}", end="")
     if args.xfer and total_up is not None:
         print(f"  |  Total ↑{total_up:.1f} KB/s  ↓{total_down:.1f} KB/s (Δt={dt:.1f}s)")
     else:
