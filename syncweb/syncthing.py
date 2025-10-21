@@ -1,5 +1,4 @@
-from contextlib import suppress
-import os, shutil, socket, subprocess, sys, tempfile, time
+import os, shutil, socket, subprocess, tempfile, time
 from functools import cached_property
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import requests
 from syncweb.cmd_utils import Pclose, cmd
 from syncweb.config import ConfigXML
 from syncweb.consts import PYTEST_RUNNING
+from syncweb.ensure import ensure_syncthing
 from syncweb.log_utils import log
 
 ROLE_TO_TYPE = {
@@ -20,7 +20,7 @@ ROLE_TO_TYPE = {
 class SyncthingNodeXML:
     def __init__(self, name: str = "st-node", syncthing_exe=None, base_dir=None):
         self.name = name
-        self.syncthing_exe = syncthing_exe or self.find_syncthing_bin()
+        self.syncthing_exe = syncthing_exe or ensure_syncthing()
         self.process: subprocess.Popen
         self.sync_port: int
         self.discovery_port: int
@@ -51,15 +51,6 @@ class SyncthingNodeXML:
                 self.running = False
         else:
             self.xml_update_config()
-
-    @staticmethod
-    def find_syncthing_bin():
-        rel_bin = "./syncthing"
-        if os.path.exists(rel_bin):
-            default_bin = os.path.realpath(rel_bin)
-        else:
-            default_bin = shutil.which("syncthing") or "syncthing"
-        return default_bin
 
     def xml_set_default_config(self, testing=False):
         node = self.config["device"]

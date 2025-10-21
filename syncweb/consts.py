@@ -6,6 +6,7 @@ APPLICATION_START = int(datetime.now(tz=timezone.utc).timestamp())
 IS_WINDOWS = os.name == "nt" or sys.platform in ("win32", "cygwin", "msys")
 PYTEST_RUNNING = "pytest" in sys.modules
 TERMINAL_SIZE = shutil.get_terminal_size(fallback=(600, 50))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class FolderRef(NamedTuple):

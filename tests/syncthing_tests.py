@@ -1,6 +1,5 @@
 import shutil
 from pathlib import Path
-from time import sleep
 
 import pytest
 

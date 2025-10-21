@@ -1,11 +1,9 @@
-from time import sleep
-import pytest
-from tests import db
 import tests.fstree as fstree
 from syncweb.cmd_utils import cmd
-from syncweb.syncthing import SyncthingCluster, SyncthingNode
+from syncweb.syncthing import SyncthingCluster
 
 cmd("pkill", "-f", "syncweb-py/syncthing", strict=False)
+
 
 def test_w_w_copy():
     with SyncthingCluster(["w", "w"]) as cluster:
