@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import hashlib, json, os, platform, re, shutil, subprocess, tarfile, tempfile, urllib.request
+import hashlib, json, os, platform, re, shutil, subprocess, sys, tarfile, tempfile, urllib.request
 from contextlib import suppress
 from functools import total_ordering
 
@@ -50,17 +50,21 @@ class Version:
 
 MIN_VERSION = Version("2.0.1")
 API_URL = "https://api.github.com/repos/syncthing/syncthing/releases/latest"
-DEST_PATH = os.path.join(consts.SCRIPT_DIR, "syncthing")
+
+if sys.platform.startswith("win"):
+    EXE_NAME = "syncthing.exe"
+else:
+    EXE_NAME = "syncthing"
+DEST_PATH = os.path.join(consts.SCRIPT_DIR, EXE_NAME)
 
 
 def find_syncthing_bin():
-    rel_bin = "./syncthing"
-    if os.path.exists(rel_bin):
-        return os.path.realpath(rel_bin)
+    if os.path.exists(EXE_NAME):
+        return os.path.realpath(EXE_NAME)
     elif os.path.exists(DEST_PATH):
         return os.path.realpath(DEST_PATH)
     else:
-        default_bin = shutil.which("syncthing") or "syncthing"
+        default_bin = shutil.which(EXE_NAME) or EXE_NAME
         return default_bin
 
 
@@ -143,10 +147,10 @@ def atomic_replace(src_path, dest_path):
 def extract_syncthing(archive, dest_path):
     with tarfile.open(archive, "r:gz") as tar:
         for member in reversed(tar.getmembers()):
-            if os.path.basename(member.name) == "syncthing":
-                member.name = "syncthing"
+            if os.path.basename(member.name) == EXE_NAME:
+                member.name = EXE_NAME
                 tar.extract(member, path=os.path.dirname(archive))
-                src_path = os.path.join(os.path.dirname(archive), "syncthing")
+                src_path = os.path.join(os.path.dirname(archive), EXE_NAME)
                 atomic_replace(src_path, dest_path)
                 return dest_path
     raise RuntimeError("No syncthing binary found in archive.")
