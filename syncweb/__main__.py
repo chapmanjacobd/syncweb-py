@@ -50,6 +50,24 @@ def cmd_resume(args):
         log.info("Resumed", added, "device" if added == 1 else "devices")
 
 
+def cmd_pause_folder(args):
+    if args.all:
+        added = args.st.cmd_pause_folder()
+        log.info("Paused all folders")
+    else:
+        added = args.st.cmd_pause_folder(args.folder_ids)
+        log.info("Paused", added, "folder" if added == 1 else "folders")
+
+
+def cmd_resume_folder(args):
+    if args.all:
+        added = args.st.cmd_resume_folder()
+        log.info("Resumed all folders")
+    else:
+        added = args.st.cmd_resume_folder(args.folder_ids)
+        log.info("Resumed", added, "folder" if added == 1 else "folders")
+
+
 def cmd_accept(args):
     added = args.st.cmd_accept(args.device_ids)
     log.info("Added %s %s", added, "device" if added == 1 else "devices")
@@ -154,6 +172,23 @@ def cli():
         nargs="+",
         action=ArgparseList,
         help="One or more Syncthing device IDs (space or comma-separated)",
+    )
+
+    pause_folder = subparsers.add_parser("pause-folder", help="Pause a folder in your syncweb", func=cmd_pause)
+    pause_folder.add_argument("--all", "-a", action="store_true", help="All folders")
+    pause_folder.add_argument(
+        "folder_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing folder IDs (space or comma-separated)",
+    )
+    resume_folder = subparsers.add_parser("resume-folder", help="Resume a folder in your syncweb", func=cmd_resume)
+    resume_folder.add_argument("--all", "-a", action="store_true", help="All folders")
+    resume_folder.add_argument(
+        "folder_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing folder IDs (space or comma-separated)",
     )
 
     ls = subparsers.add_parser("ls", aliases=["list"], help="List files at the current directory level", func=cmd_ls)

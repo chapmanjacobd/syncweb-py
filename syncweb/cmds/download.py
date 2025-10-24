@@ -8,8 +8,9 @@ from syncweb.cmds.ls import is_directory, path2fid
 from syncweb.log_utils import log
 
 # TODO: add --timeout-size and quantity limits
-# add option to truncate at free space limit
+# add option to truncate to free_space - buffer limit
 
+# TODO: ignore existing files and pending downloads
 
 def collect_files(args, items, current_path=""):
     for item in items:
@@ -207,8 +208,6 @@ def print_download_summary(args, plan) -> bool:
     # Group folders by mountpoint to avoid double-booking space
     mountpoint_groups = group_folders_by_mountpoint(folder_stats)
 
-    # TODO: We should also subtract space for files queued for download but not yet downloaded
-
     # Calculate space usage per mountpoint
     mountpoint_usage = {}
     for mountpoint, folder_ids in mountpoint_groups.items():
@@ -249,7 +248,7 @@ def print_download_summary(args, plan) -> bool:
                     if len(folder_ids) > 3:
                         folder_list += f", ... ({len(folder_ids)} total)"
                     warnings.append(
-                        f"⚠ Shared mountpoint ({mountpoint}): "
+                        f"Shared mountpoint ({mountpoint}): "
                         f"Combined download size ({str_utils.file_size(total_download_size)}) "
                         f"exceeds usable space ({str_utils.file_size(usable)}) "
                         f"across folders: {folder_list}"
@@ -259,7 +258,7 @@ def print_download_summary(args, plan) -> bool:
                     min_free_config = space_info_folder["min_free_config"]
                     buffer_desc = f"{min_free_config['value']}{min_free_config['unit']}"
                     warnings.append(
-                        f"⚠ Folder {first_folder_id}: Download size ({str_utils.file_size(total_download_size)}) "
+                        f"Folder {first_folder_id}: Download size ({str_utils.file_size(total_download_size)}) "
                         f"exceeds usable space ({str_utils.file_size(usable)}) "
                         f"[preserving {str_utils.file_size(max_min_free)} buffer ({buffer_desc})]"
                     )
@@ -268,7 +267,7 @@ def print_download_summary(args, plan) -> bool:
     print("\nDownload Summary:")
     print("-" * 135)
     print(
-        f"{'Folder ID':<40} {'Files':>8} {'Total Size':>12} {'Usable':>12} {'Pending':>12} {'Buffer':>12} {'Shared':>7} {'Status':>8}"
+        f"{'Folder ID':<40} {'Files':>8} {'Total Size':>12} {'Usable':>12} {'Pending':>12} {'Buffer':>15} {'Status':>8}"
     )
     print("-" * 135)
 
@@ -298,7 +297,6 @@ def print_download_summary(args, plan) -> bool:
             max_min_free = mp_info["max_min_free"]
             total_pending = mp_info["total_pending"]
             total_download_on_mp = mp_info["total_download"]
-            is_shared = mp_info["shared"]
 
             # For display, show the folder's individual buffer config and pending downloads
             min_free_config = space_info["min_free_config"]
@@ -309,22 +307,20 @@ def print_download_summary(args, plan) -> bool:
             pending_str = str_utils.file_size(pending_download) if pending_download > 0 else "-"
 
             usable_str = str_utils.file_size(usable)
-            shared_str = "Yes" if is_shared else "No"
 
             # Status based on total mountpoint usage, not individual folder
             if total_download_on_mp > usable:
-                status = "⚠ LOW"
+                status = "LOW"
             else:
                 status = "OK"
         else:
             usable_str = "Unknown"
             pending_str = "?"
             buffer_str = "Unknown"
-            shared_str = "?"
             status = "?"
 
         print(
-            f"{folder_id:<40} {count:>8} {str_utils.file_size(size):>12} {usable_str:>12} {pending_str:>12} {buffer_str:>12} {shared_str:>7} {status:>8}"
+            f"{folder_id:<40} {count:>8} {str_utils.file_size(size):>12} {usable_str:>12} {pending_str:>12} {buffer_str:>15} {status:>8}"
         )
 
     # Print totals
@@ -348,7 +344,7 @@ def print_download_summary(args, plan) -> bool:
 
     # Print warnings
     if warnings:
-        print("\n⚠ WARNINGS:")
+        print("\nWARNINGS:")
         for warning in warnings:
             print(f"  {warning}")
         print()

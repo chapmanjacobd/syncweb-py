@@ -650,52 +650,8 @@ class SyncthingNode(SyncthingNodeXML):
     def prioritize_file_transfer(self, folder_id: str, file_path: str):
         return self._post(f"db/prio", params={"folder": folder_id, "file": file_path})
 
-    @staticmethod
-    def paged_fn(fn, *args, **kwargs):
-        page = 1
-        per_page = 50000
-        all_files = []
-        while True:
-            resp = fn(*args, **kwargs, page=page, perpage=per_page)
-            progress = resp.get("progress") or []
-            queued = resp.get("queued") or []
-            rest = resp.get("rest") or []
-            log.debug("%s got %s progress, %s queued, %s rest", fn.__func__.__qualname__, progress, queued, rest)
-
-            batch = progress + queued + rest
-            if not batch:
-                break
-            all_files.extend(batch)
-            # Stop if fewer than per_page items were returned (last page)
-            if len(batch) < per_page:
-                break
-            page += 1
-
-        return all_files
-
-    def _remoteneed(self, **kwargs):
-        return self._get("db/remoteneed", params=kwargs)
-
-    def remoteneed(self, folder_id: str):
-        return self.paged_fn(self._remoteneed, folder=folder_id)
-
-    def _need(self, **kwargs):
-        return self._get("db/need", params=kwargs)
-
-    def need(self, folder_id: str):
-        return self.paged_fn(self._need, folder=folder_id)
-
-    def _localchanged(self, **kwargs):
-        return self._get("db/localchanged", params=kwargs)
-
-    def localchanged(self, folder_id: str):
-        return self.paged_fn(self._localchanged, folder=folder_id)
-
     def _folder_errors(self, **kwargs):
         return self._get("folder/errors", params=kwargs)
-
-    def folder_errors(self, folder_id: str):
-        return self.paged_fn(self._folder_errors, folder=folder_id)
 
     def __enter__(self):
         self.start()
