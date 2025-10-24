@@ -191,6 +191,11 @@ class Syncweb(SyncthingNode):
 
             if fid in existing_folder_ids:  # folder exists; just add new devices
                 self.add_folder_devices(fid, device_ids)
+                # pause and resume devices to unstuck them
+                for device_id in device_ids:
+                    self.pause(device_id)
+                for device_id in device_ids:
+                    self.resume(device_id)
             else:  # folder doesn't exist; create it (with devices)
                 log.info(f"[%s] Creating folder '%s'", self.name, fid)
                 cfg = {

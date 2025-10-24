@@ -259,7 +259,7 @@ class SyncthingNodeXML:
 
     def start(self, daemonize=False):
         if self.running:
-            log.warning("[START]: %s self.running already set", self.name)
+            log.debug("[START]: %s self.running already set", self.name)
             return
         if getattr(self, "process", False) and self.process.poll() is None:
             self.running = True
