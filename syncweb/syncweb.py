@@ -2,6 +2,7 @@ import fnmatch, os
 from pathlib import Path
 
 from syncweb import str_utils
+from syncweb.cmds.folders import conform_pending_folders
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
 
@@ -166,19 +167,18 @@ class Syncweb(SyncthingNode):
             self._put(f"config/devices/{dev_id}", json=cfg)
 
     def join_pending_folders(self, folder_id: str | None = None):
-        pending = self.pending_folders()
+        pending = conform_pending_folders(self.pending_folders())
         if not pending:
             log.info(f"[%s] No pending folders", self.name)
             return
         if folder_id:
-            pending = [f for f in pending if f.get("id") == folder_id]
+            pending = [f for f in pending if f["id"] == folder_id]
             if not pending:
                 log.info(f"[%s] No pending folders matching '%s'", self.name, folder_id)
                 return
 
         existing_folders = self.folders()
         existing_folder_ids = {f["id"]: f for f in existing_folders}
-        pending = [f for f in pending if f.get("id") not in existing_folder_ids]
 
         for folder in pending:
             fid = folder["id"]
