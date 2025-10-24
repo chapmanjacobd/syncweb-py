@@ -50,6 +50,38 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
+    def cmd_pause_folder(self, folder_ids=None):
+        if folder_ids is None:
+            for folder_id, _data in self.folders_dict.items():
+                self.pause_folder(folder_id)
+            return
+
+        folder_count = 0
+        for folder_id in folder_ids:
+            try:
+                self.pause_folder(folder_id)
+                folder_count += 1
+            except ValueError:
+                log.error("Invalid folder ID %s", folder_id)
+
+        return folder_count
+
+    def cmd_resume_folder(self, folder_ids=None):
+        if folder_ids is None:
+            for folder_id, _data in self.folders_dict.items():
+                self.resume_folder(folder_id)
+            return
+
+        folder_count = 0
+        for folder_id in folder_ids:
+            try:
+                self.resume_folder(folder_id)
+                folder_count += 1
+            except ValueError:
+                log.error("Invalid folder ID %s", folder_id)
+
+        return folder_count
+
     def create_folder_id(self, path):
         existing_folders = set(self.folder_stats().keys())
 
@@ -191,7 +223,7 @@ class Syncweb(SyncthingNode):
 
             if fid in existing_folder_ids:  # folder exists; just add new devices
                 self.add_folder_devices(fid, device_ids)
-                # pause and resume devices to unstuck them
+                # pause and resume devices to unstuck them (ie. "Unexpected folder ID in ClusterConfig")
                 for device_id in device_ids:
                     self.pause(device_id)
                 for device_id in device_ids:
