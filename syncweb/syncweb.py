@@ -8,7 +8,7 @@ from syncweb.syncthing import SyncthingNode
 
 
 class Syncweb(SyncthingNode):
-    def cmd_accept(self, device_ids):
+    def cmd_accept(self, device_ids, folder_ids):
         device_count = 0
         for path in device_ids:
             try:
@@ -17,6 +17,22 @@ class Syncweb(SyncthingNode):
                 device_count += 1
             except ValueError:
                 log.error("Invalid Device ID %s", path)
+
+        if not folder_ids:
+            return device_count
+
+        existing_folders = self.folders()
+        existing_folder_ids = {f["id"] for f in existing_folders}
+        for fid in folder_ids:
+            if fid in existing_folder_ids:
+                self.add_folder_devices(fid, device_ids)
+                # pause and resume devices to unstuck them (ie. "Unexpected folder ID in ClusterConfig")
+                for device_id in device_ids:
+                    self.pause(device_id)
+                for device_id in device_ids:
+                    self.resume(device_id)
+            else:
+                log.error(f"[%s] Not an known folder-id '%s'", self.name, fid)
 
         return device_count
 

@@ -69,7 +69,7 @@ def cmd_resume_folder(args):
 
 
 def cmd_accept(args):
-    added = args.st.cmd_accept(args.device_ids)
+    added = args.st.cmd_accept(args.device_ids, args.folder_ids)
     log.info("Added %s %s", added, "device" if added == 1 else "devices")
 
 
@@ -133,6 +133,14 @@ def cli():
     join.add_argument("--prefix", default=".", help="Path to parent folder")
 
     accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
+    accept.add_argument(
+        "--folder-ids",
+        "--folders",
+        "-f",
+        default=[],
+        action=ArgparseList,
+        help="Add devices to folders",
+    )
     accept.add_argument(
         "device_ids",
         nargs="+",
