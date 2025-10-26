@@ -12,6 +12,7 @@ from syncweb.log_utils import log
 
 # TODO: ignore existing files and pending downloads
 
+
 def collect_files(args, items, current_path=""):
     for item in items:
         name = item.get("name", "")
