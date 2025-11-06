@@ -1,0 +1,22 @@
+Downloads view (r)
+Folders view (potential downloads) (virtual)
+ ` Uploads view (w)
+
+--local, --multicast flag for folder or devices accept, limit to only local devices
+
+autonomous sharing
+
+- tag-based wishlist system: wanted/unwanted file extensions, etc
+- sort by Wikipedia Importance, Popularity
+
+multiple versions data as a user flag in ls
+
+count of available seeds in ls or stat
+
+only download files that have fewer than N copies; like git annex numcopies
+
+--print template in find? bridge the gap between find and stat --terse
+
+generate config.xml before release to see any changes made
+
+automap: add device to (virtual?) folder id, if too many file conflicts treat as new folder

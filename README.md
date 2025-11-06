@@ -6,6 +6,8 @@
 >
 > Ted Nelson
 
+Syncweb is not a physical network, but rather a logical network resting on top of several existing physical networks. These networks include, but are not limited to, Syncthing nodes and relays, NNCP, the Internet, an Ethernet. What is important is that two neighboring systems on Syncweb have some method to exchange files, from one system to the other, and once on the receiving system, processed by the _Block Exchange Protocol_ software on that system.
+
 ## Install
 
 Requires syncthing v2 to be installed in the PATH (or as a static binary in the same folder that you run syncweb commands in)

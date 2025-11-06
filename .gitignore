@@ -15,7 +15,6 @@ cert.pem
 *.txt
 /.mutmut-cache
 /tests/data/Youtube/
-/TODO
 /.ruff_cache/
 /__pypackages__/
 /.pdm-python

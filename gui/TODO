@@ -1,0 +1,8 @@
+https://github.com/mickael-kerjean/filestash/blob/master/server/plugin/plg_backend_s3/index.go
+https://github.com/mickael-kerjean/filestash/blob/master/server/plugin/plg_backend_git/index.go
+https://github.com/mickael-kerjean/filestash/blob/master/server/plugin/plg_backend_dropbox/index.go
+https://github.com/mickael-kerjean/filestash/blob/master/server/plugin/plg_backend_local/index.go
+
+newMiniPuller, StreamingServer
+https://github.com/pixelspark/sushitrain/commit/570ab1d1623a1dd96cf49aa224d500d7471e9986
+https://github.com/pixelspark/sushitrain/blob/da0c466b956aa2c1cca87526c9251349dd752147/SushitrainCore/src/server.go#L28

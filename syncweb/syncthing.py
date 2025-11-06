@@ -95,7 +95,7 @@ class SyncthingNodeXML:
         # disable auto update
         opts["autoUpgradeIntervalH"] = "0"
         opts["keepTemporariesH"] = "192"
-        opts["progressUpdateIntervalS"] = "-1"
+        opts["progressUpdateIntervalS"] = "5"
 
         # TODO: evaluate performance difference
         # opts["cacheIgnoredFiles"] = "true"
