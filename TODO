@@ -2,12 +2,12 @@ Downloads view (r)
 Folders view (potential downloads) (virtual)
  ` Uploads view (w)
 
---local, --multicast flag for folder or devices accept, limit to only local devices
-
 autonomous sharing
 
 - tag-based wishlist system: wanted/unwanted file extensions, etc
 - sort by Wikipedia Importance, Popularity
+
+auto-install ZIM files, rachael modules
 
 multiple versions data as a user flag in ls
 

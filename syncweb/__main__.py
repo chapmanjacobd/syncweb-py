@@ -161,6 +161,7 @@ def cli():
     devices.add_argument(
         "--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics"
     )
+    devices.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
     devices.add_argument("--pending", "--unknown", action="store_true", help="Only show pending devices")
     devices.add_argument("--accepted", "--known", action="store_true", help="Only show accepted devices")
     devices.add_argument("--accept", action="store_true", help="Accept pending devices")

@@ -189,8 +189,8 @@ class Syncweb(SyncthingNode):
         except KeyError:
             return f"{short}-???????"
 
-    def accept_pending_devices(self):
-        pending = self.pending_devices()
+    def accept_pending_devices(self, local_only=False):
+        pending = self.pending_devices(local_only=local_only)
         if not pending:
             log.info(f"[%s] No pending devices", self.name)
             return

@@ -28,19 +28,22 @@ def _calc_rate(prev, curr, dt):
 
 def cmd_list_devices(args):
     if args.accept:
-        args.st.accept_pending_devices()
+        args.st.accept_pending_devices(local_only=args.local_only)
 
     devices = []
     if not args.pending:
-        devices.extend(args.st.devices())
+        devices.extend(args.st.devices(local_only=args.local_only))
     if not args.accepted:
         devices.extend(
-            [{"deviceID": device_id, **d, "pending": True} for device_id, d in args.st.pending_devices().items()]
+            [
+                {"deviceID": device_id, **d, "pending": True}
+                for device_id, d in args.st.pending_devices(local_only=args.local_only).items()
+            ]
         )
     device_stats = args.st.device_stats()
 
     if not devices:
-        log.info("No devices configured")
+        log.info("No devices match query")
         return
 
     conn_before = args.st._get("system/connections")

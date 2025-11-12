@@ -1,4 +1,4 @@
-import os, shutil, socket, subprocess, tempfile, time
+import ipaddress, os, shutil, socket, subprocess, tempfile, time
 from functools import cached_property
 from pathlib import Path
 
@@ -475,7 +475,17 @@ class SyncthingNode(SyncthingNodeXML):
             log.warning("GUI Port is not set; relying on XML which may be incorrect")
             return str(self.config["device"]["@id"])
 
-    def devices(self):
+    def devices(self, local_only=False):
+        if local_only:
+            devices = self._get("config/devices")
+            local_devices = []
+            for d in devices:
+                address = d.get("address", "").split(":")[0]
+                if self.is_local_address(address):
+                    local_devices.append(d)
+
+            return local_devices
+
         return self._get("config/devices")
 
     @property
@@ -569,14 +579,35 @@ class SyncthingNode(SyncthingNodeXML):
     def folders(self):
         return self._get("config/folders")
 
+    @staticmethod
+    def is_local_address(s):
+        try:
+            ip = ipaddress.ip_address(s)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return True
+        except ValueError:
+            # Ignore non-IP (like DNS hostnames)
+            pass
+        return False
+
+    def pending_devices(self, local_only=False):
+        if local_only:
+            devices = self._get("cluster/pending/devices")
+            local_devices = {}
+            for device_id, info in devices.items():
+                address = info.get("address", "").split(":")[0]
+                if self.is_local_address(address):
+                    local_devices[device_id] = info
+
+            return local_devices
+
+        return self._get("cluster/pending/devices")
+
     def pending_folders(self, device_id=None):
         params = {}
         if device_id is not None:  # filter response to only folders offered from specific device
             params["device"] = device_id
         return self._get("cluster/pending/folders", params=params)
-
-    def pending_devices(self):
-        return self._get("cluster/pending/devices")
 
     def add_folder(self, **kwargs):
         if "label" not in kwargs:
