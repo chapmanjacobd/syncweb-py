@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import hashlib, json, os, platform, re, shutil, subprocess, sys, tarfile, tempfile, urllib.request
+import hashlib, json, os, platform, re, shutil, subprocess, sys, tarfile, tempfile, urllib.request, zipfile
 from contextlib import suppress
 from functools import total_ordering
 
@@ -110,7 +110,7 @@ def find_asset_and_checksum(assets, os_name, arch):
     for name, url in assets.items():
         if "sha256sum.txt.asc" in name:
             sha_url = url
-        if target_name in name and name.endswith(".tar.gz"):
+        if target_name in name and name.endswith((".tar.gz", ".zip")):
             tar_url = url
     return tar_url, sha_url
 
@@ -144,9 +144,9 @@ def atomic_replace(src_path, dest_path):
     os.unlink(src_path)
 
 
-def extract_syncthing(archive, dest_path):
+def extract_syncthing_tar(archive, dest_path):
     MIN_SIZE_BYTES = 1024 * 1024 * 2
-    with tarfile.open(archive, "r:gz") as tar:
+    with tarfile.open(archive, "r:gz" if archive.endswith(".gz") else "r") as tar:
         for member in reversed(tar.getmembers()):
             if os.path.basename(member.name) == EXE_NAME and member.isfile() and member.size > MIN_SIZE_BYTES:
                 member.name = EXE_NAME
@@ -155,6 +155,23 @@ def extract_syncthing(archive, dest_path):
                 atomic_replace(src_path, dest_path)
                 return dest_path
     raise RuntimeError("No syncthing binary found in archive.")
+
+
+def extract_syncthing_zip(archive, dest_path):
+    MIN_SIZE_BYTES = 1024 * 1024 * 2
+
+    with zipfile.ZipFile(archive, "r") as zf:
+        for info in reversed(zf.infolist()):
+            if os.path.basename(info.filename) == EXE_NAME and not info.is_dir() and info.file_size > MIN_SIZE_BYTES:
+                extract_dir = os.path.dirname(archive)
+                tmp_path = os.path.join(extract_dir, EXE_NAME)
+                with zf.open(info, "r") as src, open(tmp_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst, length=1024 * 1024)
+
+                atomic_replace(tmp_path, dest_path)
+                return dest_path
+
+    raise RuntimeError("No syncthing binary found in ZIP archive.")
 
 
 def ensure_syncthing():
@@ -187,7 +204,10 @@ def ensure_syncthing():
             urllib.request.urlretrieve(sha_url, checksum_path)
             verify_checksum(checksum_path, os.path.basename(ar_path), ar_path)
 
-        extract_syncthing(ar_path, DEST_PATH)
+        if ar_path.endswith(".zip"):
+            extract_syncthing_zip(ar_path, DEST_PATH)
+        else:
+            extract_syncthing_tar(ar_path, DEST_PATH)
         return DEST_PATH
 
 
