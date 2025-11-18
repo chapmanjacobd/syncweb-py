@@ -30,11 +30,13 @@ $ syncweb join sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56
 Local Device ID: NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
 ```
 
-You will then need to accept their device ID. (Their device ID is printed for convenience when running the previous command.)
+You will then need to accept their device ID. Their device ID is printed for convenience when running the previous command `syncweb join` but they can also find their 🏠 device ID by running `syncweb devices`.
 
 ```sh
 $ syncweb accept --folders=audio NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
 ```
+
+Now you're ready to share files!
 
 ### List files
 
@@ -82,6 +84,25 @@ TOTAL           87     216.9MiB
 ---------------------------------------------------------------------------------------
 
 Mark 87 files (216.9MiB) for download? [y/N]:
+```
+
+### List devices
+
+```sh
+$ syncweb devices
+Device ID                                                        Name     Last Seen              Duration    Bandwidth Limit
+---------------------------------------------------------------  -------  ---------------------  ----------  -----------------
+FXVNMWB-RHVAHJX-GG6QRDK-BMBO7KH-526SY6Y-6YVKEIE-2PPM5P7-F62C2AT  syncweb  🏠                                 Unlimited
+7ZEWMJV-3JBF4CI-F4Z4CWC-U6232BS-3CP6BUI-FSXZORS-JHGJ4V3-5QDWCAE  syncweb  😴 23 days ago, 19:34  1.3 days    Unlimited
+```
+
+### List folders
+
+```sh
+syncweb folders
+Folder ID    Label    Path                         Local             Needed             Global                Free    Sync Status      Peers  Errors
+-----------  -------  ---------------------------  ----------------  -----------------  --------------------  ------  -------------  -------  -------------------
+content      -        /tmp/tmp.WwxPwoouIa/content  0 files (0Bytes)  1 files (10.8GiB)  753 files (170.5GiB)  -       94% error            1  folder path missing
 ```
 
 ### Debugging
