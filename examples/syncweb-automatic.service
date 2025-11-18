@@ -1,0 +1,13 @@
+[Unit]
+Description=SyncWeb-automatic daemon
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/syncweb-automatic
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+while true; do
+    # Accept new local peers
+    syncweb devices --local-only --pending --accept
+
+    # Join pending folders
+    syncweb folders --pending --join
+
+    # Update Wishlists
+
+    sleep 20
+done

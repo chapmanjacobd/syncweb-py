@@ -10,22 +10,20 @@ Syncweb is not a physical network, but rather a logical network resting on top o
 
 ## Install
 
-Requires syncthing v2 to be installed in the PATH (or as a static binary in the same folder that you run syncweb commands in)
-
 ```sh
 pip install syncweb
 ```
 
 ## Usage
 
-Start your syncweb cluster by creating your first folder
+Start your syncweb cluster by creating your first folder (can be an existing folder)
 
 ```sh
-$ syncweb create audio/
+$ syncweb create ./audio/
 sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
 ```
 
-Share your new folder with someone else
+Share your new syncweb folder with someone else
 
 ```sh
 $ syncweb join sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
