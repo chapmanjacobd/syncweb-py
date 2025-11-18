@@ -14,7 +14,7 @@ from syncweb.cmds.stat import cmd_stat
 from syncweb.log_utils import log
 from syncweb.syncweb import Syncweb
 
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 
 
 def cmd_version(args):

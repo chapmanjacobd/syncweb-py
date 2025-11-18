@@ -145,9 +145,10 @@ def atomic_replace(src_path, dest_path):
 
 
 def extract_syncthing(archive, dest_path):
+    MIN_SIZE_BYTES = 1024 * 1024 * 2
     with tarfile.open(archive, "r:gz") as tar:
         for member in reversed(tar.getmembers()):
-            if os.path.basename(member.name) == EXE_NAME:
+            if os.path.basename(member.name) == EXE_NAME and member.isfile() and member.size > MIN_SIZE_BYTES:
                 member.name = EXE_NAME
                 tar.extract(member, path=os.path.dirname(archive))
                 src_path = os.path.join(os.path.dirname(archive), EXE_NAME)
@@ -168,6 +169,8 @@ def ensure_syncthing():
 
     os_name, arch = get_platform()
     assets, tag = get_latest_assets()
+    print(f"Downloading Syncthing {tag} to {DEST_PATH}")
+
     tar_url, sha_url = find_asset_and_checksum(assets, os_name, arch)
     if not tar_url:
         raise RuntimeError(f"No compatible binary found for {os_name}/{arch}")
@@ -185,7 +188,6 @@ def ensure_syncthing():
             verify_checksum(checksum_path, os.path.basename(ar_path), ar_path)
 
         extract_syncthing(ar_path, DEST_PATH)
-        print(f"Downloaded Syncthing {tag} to {DEST_PATH}")
         return DEST_PATH
 
 

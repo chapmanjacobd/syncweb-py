@@ -23,14 +23,14 @@ $ syncweb create ./audio/
 sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
 ```
 
-Share your new syncweb folder with someone else
+Share your new syncweb folder with someone else by having them run:
 
 ```sh
 $ syncweb join sync://audio#CKTVWGQ-XBRFFRH-YTRPQ5G-YDA5YXI-N66GA5J-XVBGEZ3-PD56G6Y-N7TEAQC
 Local Device ID: NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
 ```
 
-...you will also need to accept their device ID
+You will then need to accept their device ID. (Their device ID is printed for convenience when running the previous command.)
 
 ```sh
 $ syncweb accept --folders=audio NXL7XBL-VPNDOSR-QXU7WI7-NEUI65A-TWN7YGT-WS2U457-NTZNGB4-J6IYDQH
