@@ -423,9 +423,6 @@ class SyncthingNode(SyncthingNodeXML):
     def shutdown(self):
         return self._post("system/shutdown")
 
-    def restart(self):
-        return self._post("system/restart")
-
     def is_restart_required(self) -> bool:
         resp = self._get("config/restart-required")
         return resp.get("restartRequired", False)

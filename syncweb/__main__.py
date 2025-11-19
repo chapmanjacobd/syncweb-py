@@ -22,9 +22,8 @@ def cmd_version(args):
     print("Syncthing", args.st.version["version"])
 
 
-def cmd_restart(args):
-    log.info("Restarting Syncweb...")
-    args.st.restart()
+def cmd_start(args):
+    log.info("Started Syncweb...")
 
 
 def cmd_shutdown(args):
@@ -343,7 +342,7 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
     )
 
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
-    subparsers.add_parser("restart", help="Restart Syncweb", aliases=["start"], func=cmd_restart)
+    subparsers.add_parser("start", help="Start Syncweb", aliases=["restart"], func=cmd_start)
 
     subparsers.add_parser("repl", help="Talk to Syncthing API", func=lambda a: (self := a.st) and breakpoint())
     subparsers.add_parser("version", help="Show Syncweb version", func=cmd_version)
