@@ -2,11 +2,11 @@ Downloads view (r)
 Folders view (potential downloads) (virtual)
  ` Uploads view (w)
 
-- tag-based wishlist system for uploads/downloads: wanted/unwanted file extensions, etc
-
-- sort by Wikipedia Importance, Popularity
+sort by Wikipedia Importance
 
 auto-install ZIM files, rachael modules
+
+share ZIM files, rachael modules? symbolic link from syncweb folder?
 
 multiple versions data as a user flag in ls
 

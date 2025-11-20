@@ -7,7 +7,8 @@ while true; do
     # Join pending folders
     syncweb folders --pending --join
 
-    # Update Wishlists
+    # Mark new downloads via wishlists
+    grep -Fv -f <(blocklist.sh) <(wishlist.sh) | syncweb download --yes
 
     sleep 20
 done
