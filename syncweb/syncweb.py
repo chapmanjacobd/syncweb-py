@@ -254,12 +254,3 @@ class Syncweb(SyncthingNode):
                     "devices": [{"deviceID": d} for d in device_ids],
                 }
                 self._post("config/folders", json=cfg)
-
-    def _is_ignored(self, rel_path: Path, patterns: list[str]) -> bool:
-        s = str(rel_path)
-        for pat in patterns:
-            if fnmatch.fnmatch(s, pat):
-                return True
-            if fnmatch.fnmatch(s + "/", pat):  # match directories
-                return True
-        return False
