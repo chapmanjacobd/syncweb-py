@@ -1,5 +1,4 @@
-import fnmatch, os
-from pathlib import Path
+import os
 
 from syncweb import str_utils
 from syncweb.cmds.folders import conform_pending_folders
