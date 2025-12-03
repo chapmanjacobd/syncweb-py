@@ -1,3 +1,5 @@
+*.apk
+*.zim
 /syncweb/syncthing
 /test
 /.vscode

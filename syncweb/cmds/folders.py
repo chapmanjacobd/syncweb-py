@@ -170,7 +170,7 @@ def cmd_list_folders(args):
                 else "-"
             ),
             "Free": d["free_space"] or "-",
-            "Sync Status": "%s %.0f %s" % (d["status"], d["sync_pct"], d["state"]),
+            "Sync Status": "%s %.0f%% %s" % (d["status"], d["sync_pct"], d["state"]),
             "Peers": d["device_count"],
             "Errors": d["err_display"],
         }
