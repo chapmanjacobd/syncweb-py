@@ -150,9 +150,12 @@ def cli():
     folders = subparsers.add_parser(
         "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
     )
+    folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
     folders.add_argument("--pending", "--unknown", action="store_true", help="Only show pending folders")
     folders.add_argument("--accepted", "--known", action="store_true", help="Only show accepted folders")
-    folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
+    folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
+    folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
+    folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")
 
     devices = subparsers.add_parser(
         "devices", aliases=["list-devices", "lsd"], help="List Syncthing devices", func=cmd_list_devices

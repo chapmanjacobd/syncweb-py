@@ -49,7 +49,7 @@ def conform_pending_folders(pending):
 
 
 def cmd_list_folders(args):
-    device_id = args.st.device_id
+    # device_id = args.st.device_id
 
     if args.join:
         # TODO: add option(s) to filter by label, devices, or folder_id
@@ -65,23 +65,30 @@ def cmd_list_folders(args):
         log.info("No folders configured")
         return
 
-    table_data = []
+    filtered_folders = []
     for folder in folders:
-        folder_id = folder.get("id") or "unknown"
-        label = folder.get("label") or "-"
-        path = folder.get("path") or ""
+        folder_id = folder.get("id")
+        label = folder.get("label")
+        path = folder.get("path")
         paused = folder.get("paused") or False
         status = "⏸️" if paused else ""
         pending = folder.get("pending") or False
 
-        url = f"sync://{folder_id}#{device_id}"
-        if pending:
-            url = f"sync://{folder_id}#{folder.get('devices')[0]}"
-        print(url)
+        # url = f"sync://{folder_id}#{device_id}"
+        # if pending:
+        #     url = f"sync://{folder_id}#{folder.get('devices')[0]}"
+        # print(url)
 
         fs = {}
         if not pending:
             fs |= args.st.folder_status(folder_id)
+
+        if args.missing:
+            error = fs.get("error")
+            if error is None:
+                continue
+            elif "folder path missing" not in error:
+                continue
 
         # Basic state
         state = fs.get("state")
@@ -89,21 +96,21 @@ def cmd_list_folders(args):
             state = "pending" if pending else "unknown"
 
         # Local vs Global
-        local_files = fs.get("localFiles", 0)
-        global_files = fs.get("globalFiles", 0)
-        local_bytes = fs.get("localBytes", 0)
-        global_bytes = fs.get("globalBytes", 0)
+        local_files = fs.get("localFiles")
+        global_files = fs.get("globalFiles")
+        local_bytes = fs.get("localBytes")
+        global_bytes = fs.get("globalBytes")
 
         # Sync progress (remaining items)
-        need_files = fs.get("needFiles", 0)
-        need_bytes = fs.get("needBytes", 0)
+        need_files = fs.get("needFiles")
+        need_bytes = fs.get("needBytes")
         sync_pct = 100
-        if global_bytes > 0:
+        if global_bytes and global_bytes > 0:
             sync_pct = (1 - (need_bytes / global_bytes)) * 100
 
         # Errors and pulls
-        err_count = fs.get("errors", 0)
-        pull_errors = fs.get("pullErrors", 0)
+        err_count = fs.get("errors")
+        pull_errors = fs.get("pullErrors")
         err_msg = fs.get("error") or fs.get("invalid") or ""
         err_display = []
         if err_count:
@@ -117,39 +124,71 @@ def cmd_list_folders(args):
         devices = folder.get("devices") or []
         device_count = len(devices) - (0 if pending else 1)
 
-        free_str = "-"
+        free_space = None
         if os.path.exists(path):
             disk_info = shutil.disk_usage(path)
             if disk_info:
-                free_str = file_size(disk_info.free)
+                free_space = file_size(disk_info.free)
 
-        table_data.append(
-            [
-                folder_id,
-                label,
-                "-" if pending else path,
-                "-" if pending else f"{local_files} files ({file_size(local_bytes)})",
-                "-" if pending else f"{need_files} files ({file_size(need_bytes)})",
-                "-" if pending else f"{global_files} files ({file_size(global_bytes)})",
-                free_str,
-                f"{status} {sync_pct:.0f}% {state}",
-                device_count,
-                err_display,
-            ]
+        filtered_folders.append(
+            {
+                "folder_id": folder_id,
+                "label": label,
+                "path": path,
+                "local_files": local_files,
+                "local_bytes": local_bytes,
+                "need_files": need_files,
+                "need_bytes": need_bytes,
+                "global_files": global_files,
+                "global_bytes": global_bytes,
+                "free_space": free_space,
+                "status": status,
+                "sync_pct": sync_pct,
+                "state": state,
+                "device_count": device_count,
+                "err_display": err_display,
+                "pending": pending,
+            }
         )
 
-    headers = [
-        "Folder ID",
-        "Label",
-        "Path",
-        "Local",
-        "Needed",
-        "Global",
-        "Free",
-        "Sync Status",
-        "Peers",
-        "Errors",
+    table_data = [
+        {
+            "Folder ID": d["folder_id"],
+            "Label": d["label"],
+            "Path": d["path"] or "-",
+            "Local": (
+                "%d files (%s)" % (d["local_files"], file_size(d["local_bytes"]))
+                if d["local_files"] is not None
+                else "-"
+            ),
+            "Needed": (
+                "%d files (%s)" % (d["need_files"], file_size(d["need_bytes"])) if d["need_files"] is not None else "-"
+            ),
+            "Global": (
+                "%d files (%s)" % (d["global_files"], file_size(d["global_bytes"]))
+                if d["global_files"] is not None
+                else "-"
+            ),
+            "Free": d["free_space"] or "-",
+            "Sync Status": "%s %.0f %s" % (d["status"], d["sync_pct"], d["state"]),
+            "Peers": d["device_count"],
+            "Errors": d["err_display"],
+        }
+        for d in filtered_folders
     ]
 
     print()
-    print(tabulate(table_data, headers=headers, tablefmt="simple"))
+    print(tabulate(table_data, headers="keys", tablefmt="simple"))
+
+    if args.delete_files:
+        print()
+        for filtered_folder in filtered_folders:
+            if not filtered_folder["pending"]:
+                shutil.rmtree(filtered_folder["path"])
+
+    if args.delete:
+        for filtered_folder in filtered_folders:
+            if filtered_folder["pending"]:
+                args.st.delete_pending_folder(filtered_folder["folder_id"])
+            else:
+                args.st.delete_folder(filtered_folder["folder_id"])
