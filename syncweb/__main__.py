@@ -129,7 +129,7 @@ def cli():
         syncweb://folder-id/subfolder/file#device-id
 """,
     )
-    join.add_argument("--prefix", default=".", help="Path to parent folder")
+    join.add_argument("--prefix", default=os.getenv("SYNCWEB_HOME") or ".", help="Path to parent folder")
 
     accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
     accept.add_argument(

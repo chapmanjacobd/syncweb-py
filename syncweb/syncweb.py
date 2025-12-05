@@ -1,6 +1,7 @@
 import os
+from pathlib import Path
 
-from syncweb import str_utils
+from syncweb import consts, str_utils
 from syncweb.cmds.folders import conform_pending_folders
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
@@ -104,7 +105,7 @@ class Syncweb(SyncthingNode):
         if name not in existing_folders:
             return name
 
-        return str_utils.path_hash(path)
+        return str_utils.sep_replace(path)
 
     def cmd_init(self, paths):
         folder_count = 0
@@ -112,11 +113,15 @@ class Syncweb(SyncthingNode):
             os.makedirs(path, exist_ok=True)
             path = os.path.realpath(path)
 
-            folder_id = self.create_folder_id(path)
-            self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="sendonly")
-            self.set_ignores(folder_id, lines=[])
+            if path in self.folder_roots:
+                folder_id = self.folder_roots[path]
+            else:
+                folder_id = self.create_folder_id(path)
+                self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="sendonly")
+                self.set_ignores(folder_id, lines=[])
+                folder_count += 1
+
             print(f"sync://{folder_id}#{self.device_id}")
-            folder_count += 1
         return folder_count
 
     def cmd_join(self, urls, prefix=".", decode=True):
@@ -132,9 +137,11 @@ class Syncweb(SyncthingNode):
                 path = os.path.join(default_path, ref.folder_id)
                 os.makedirs(path, exist_ok=True)
 
-                folder_id = self.create_folder_id(path)
-                if path not in self.folder_roots:
-                    self.add_folder(id=folder_id, path=path, type="receiveonly", paused=True)
+                if path in self.folder_roots:
+                    folder_id = self.folder_roots[path]
+                else:
+                    folder_id = self.create_folder_id(path)
+                    self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="receiveonly", paused=True)
                     self.set_ignores(folder_id)
                     self.resume_folder(folder_id)
                     folder_count += 1

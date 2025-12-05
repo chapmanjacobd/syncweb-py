@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, quote, unquote, urlparse, urlunparse
 import humanize
 from idna import decode as puny_decode
 
+from syncweb import consts
 from syncweb.consts import FolderRef
 from syncweb.log_utils import log
 
@@ -55,6 +56,21 @@ def relativize(p: Path):
     if str(p).startswith("/"):
         p = p.relative_to("/")
     return p
+
+def sep_replace(s, replacement="."):
+    path_obj = Path(s)
+    if consts.IS_WINDOWS:
+        drive_part = path_obj.drive
+        relative_path = path_obj.relative_to(path_obj.anchor) if path_obj.anchor else path_obj
+        formatted_drive = drive_part[0].lower().replace(':', '') if drive_part else ''
+        formatted_relative = str(relative_path).replace(os.sep, replacement)
+        if formatted_drive:
+            return f"{formatted_drive}{replacement}{formatted_relative}"
+        else:
+            return formatted_relative
+    else:
+        relative_path = path_obj.relative_to(path_obj.anchor) if path_obj.is_absolute() else path_obj
+        return str(relative_path).replace(os.sep, replacement)
 
 
 def repeat_until_same(fn):  # noqa: ANN201
@@ -169,15 +185,6 @@ def parse_syncweb_path(value: str, decode: bool = True) -> FolderRef:
         subpath = f"{subpath}/"
 
     return FolderRef(folder_id=folder_id, subpath=subpath, device_id=device_id)
-
-
-def path_hash(path_string: str) -> str:
-    abs_path = os.path.abspath(path_string)
-
-    hash_object = hashlib.sha1(abs_path.encode("utf-8"))
-    hash_bytes = hash_object.digest()  # 20 bytes
-    short_hash = base64.urlsafe_b64encode(hash_bytes).decode("utf-8").rstrip("=")
-    return short_hash
 
 
 def basename(path):

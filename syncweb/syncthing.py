@@ -95,7 +95,7 @@ class SyncthingNodeXML:
         # disable auto update
         opts["autoUpgradeIntervalH"] = "0"
         opts["keepTemporariesH"] = "192"
-        opts["progressUpdateIntervalS"] = "5"
+        opts["progressUpdateIntervalS"] = "10"
 
         # TODO: evaluate performance difference
         # opts["cacheIgnoredFiles"] = "true"
@@ -206,7 +206,7 @@ class SyncthingNodeXML:
         folder["hashers"] = "0"
         folder["order"] = "random"
         folder["ignoreDelete"] = "false"
-        folder["scanProgressIntervalS"] = "-1"
+        folder["scanProgressIntervalS"] = "10"
         folder["pullerPauseS"] = "0"
         folder["pullerDelayS"] = "1"
         folder["maxConflicts"] = "10"
@@ -544,12 +544,13 @@ class SyncthingNode(SyncthingNodeXML):
     def set_default_folder(self, **folder):
         default_folder = self.default_folder()
         default_folder["name"] = "default"
-        default_folder["path"] = os.path.realpath(".")
+        default_folder["label"] = "Syncweb Default"
+        default_folder["path"] = os.getenv("SYNCWEB_HOME") or os.path.realpath(os.path.expanduser("~/Syncweb"))
         default_folder["rescanIntervalS"] = 7200
         default_folder["fsWatcherDelayS"] = 5
         default_folder["ignorePerms"] = True
         default_folder["ignoreDelete"] = True
-        default_folder["scanProgressIntervalS"] = -1
+        default_folder["scanProgressIntervalS"] = 10
         default_folder["copyRangeMethod"] = "all"
         folder = default_folder | folder
         return self._put("config/defaults/folder", json=folder)
