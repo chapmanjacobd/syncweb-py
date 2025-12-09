@@ -1,7 +1,6 @@
 import os
-from pathlib import Path
 
-from syncweb import consts, str_utils
+from syncweb import str_utils
 from syncweb.cmds.folders import conform_pending_folders
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
@@ -141,7 +140,9 @@ class Syncweb(SyncthingNode):
                     folder_id = self.folder_roots[path]
                 else:
                     folder_id = self.create_folder_id(path)
-                    self.add_folder(id=folder_id, label=str_utils.basename(path), path=path, type="receiveonly", paused=True)
+                    self.add_folder(
+                        id=folder_id, label=str_utils.basename(path), path=path, type="receiveonly", paused=True
+                    )
                     self.set_ignores(folder_id)
                     self.resume_folder(folder_id)
                     folder_count += 1

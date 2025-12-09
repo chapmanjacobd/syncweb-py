@@ -1,4 +1,4 @@
-import base64, datetime, hashlib, os, re, sys
+import datetime, os, re, sys
 from contextlib import suppress
 from datetime import timezone as tz
 from pathlib import Path
@@ -57,12 +57,13 @@ def relativize(p: Path):
         p = p.relative_to("/")
     return p
 
+
 def sep_replace(s, replacement="."):
     path_obj = Path(s)
     if consts.IS_WINDOWS:
         drive_part = path_obj.drive
         relative_path = path_obj.relative_to(path_obj.anchor) if path_obj.anchor else path_obj
-        formatted_drive = drive_part[0].lower().replace(':', '') if drive_part else ''
+        formatted_drive = drive_part[0].lower().replace(":", "") if drive_part else ""
         formatted_relative = str(relative_path).replace(os.sep, replacement)
         if formatted_drive:
             return f"{formatted_drive}{replacement}{formatted_relative}"

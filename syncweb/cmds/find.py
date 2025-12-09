@@ -213,9 +213,12 @@ If you want to search for all files inside the '%s' directory, use a match-all p
         data = args.st.files(folder_id, levels=args.max_depth, prefix=prefix)
         log.debug("files: %s top-level data", len(data))
 
-        # TODO: or should it be PurePosixPath?
         if user_prefix:
             prefix = os.path.join(user_prefix, prefix) if prefix else user_prefix
 
-        for path in find_files(args, data, prefix, (prefix.count("/") + 0) if prefix else 0):
-            pipe_print(path)
+        for p in find_files(args, data, prefix, (prefix.count("/") + 0) if prefix else 0):
+            if path != ".":
+                p = os.path.join(path, p)
+            if args.absolute_path:
+                p = os.path.realpath(p)
+            pipe_print(p)
