@@ -16,6 +16,8 @@ ROLE_TO_TYPE = {
     "rw": "sendreceive",
 }
 
+ULA_NETWORK = ipaddress.IPv6Network("fc00::/7")
+
 
 class SyncthingNodeXML:
     def __init__(self, name: str = "st-node", syncthing_exe=None, base_dir=None):
@@ -477,7 +479,7 @@ class SyncthingNode(SyncthingNodeXML):
             devices = self._get("config/devices")
             local_devices = []
             for d in devices:
-                address = d.get("address", "").split(":")[0]
+                address = self.strip_port(d.get("address", ""))
                 if self.is_local_address(address):
                     local_devices.append(d)
 
@@ -583,19 +585,37 @@ class SyncthingNode(SyncthingNodeXML):
             ip = ipaddress.ip_address(s)
             if ip.is_private or ip.is_loopback or ip.is_link_local:
                 return True
+            elif ip.version == 6 and ip in ULA_NETWORK:
+                return True
         except ValueError:
             # Ignore non-IP (like DNS hostnames)
             pass
         return False
 
+    @staticmethod
+    def strip_port(s):
+        print(s)
+
+        if s.startswith("[") and s.endswith("]"):
+            s = s[1:-1]
+        elif s.startswith("[") and "]:" in s:
+            s = s[1 : s.rfind("]:")]
+        else:
+            last_colon_index = s.rfind(":")
+            if last_colon_index != -1:
+                s = s[:last_colon_index]
+
+        print(s)
+        return s
+
     def pending_devices(self, local_only=False):
         if local_only:
             devices = self._get("cluster/pending/devices")
             local_devices = {}
-            for device_id, info in devices.items():
-                address = info.get("address", "").split(":")[0]
+            for device_id, d in devices.items():
+                address = self.strip_port(d.get("address", ""))
                 if self.is_local_address(address):
-                    local_devices[device_id] = info
+                    local_devices[device_id] = d
 
             return local_devices
 
@@ -630,6 +650,20 @@ class SyncthingNode(SyncthingNodeXML):
 
         existing_folder["devices"].extend(new_devices)
         log.debug(f"[%s] Patching '%s' with %s new devices", folder_id, self.name, len(new_devices))
+        self._patch(f"config/folders/{folder_id}", json=existing_folder)
+
+    def remove_folder_devices(self, folder_id: str, device_ids: list[str]):
+        existing_folder = self.folder(folder_id)
+
+        existing_devices = existing_folder.get("devices") or []
+        new_devices = [d for d in existing_devices if d["deviceID"] not in device_ids]
+        if new_devices == existing_devices:
+            return
+
+        existing_folder["devices"] = new_devices
+        log.debug(
+            f"[%s] Patching '%s' to drop %n devices", folder_id, self.name, len(existing_devices) - len(new_devices)
+        )
         self._patch(f"config/folders/{folder_id}", json=existing_folder)
 
     def delete_folder(self, folder_id: str):

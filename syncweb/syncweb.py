@@ -35,6 +35,35 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
+    def cmd_drop(self, device_ids, folder_ids):
+        device_count = 0
+        if folder_ids:
+            existing_folders = self.folders()
+            existing_folder_ids = {f["id"] for f in existing_folders}
+            for fid in folder_ids:
+                if fid in existing_folder_ids:
+                    self.remove_folder_devices(fid, device_ids)
+                    # pause and resume devices to immediately drop existing connections
+                    for device_id in device_ids:
+                        self.pause(device_id)
+                    for device_id in device_ids:
+                        self.resume(device_id)
+                else:
+                    log.error(f"[%s] Not an known folder ID '%s'", self.name, fid)
+
+            return device_count
+
+        for path in device_ids:
+            try:
+                device_id = str_utils.extract_device_id(path)
+                self.delete_device(device_id)
+                # self.delete_pending_device(device_id)
+                device_count += 1
+            except ValueError:
+                log.error("Invalid Device ID %s", path)
+
+        return device_count
+
     def cmd_pause(self, device_ids=None):
         if device_ids is None:
             return self.pause()

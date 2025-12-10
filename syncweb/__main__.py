@@ -72,6 +72,11 @@ def cmd_accept(args):
     log.info("Added %s %s", added, "device" if added == 1 else "devices")
 
 
+def cmd_drop(args):
+    added = args.st.cmd_drop(args.device_ids, args.folder_ids)
+    log.info("Removed %s %s", added, "device" if added == 1 else "devices")
+
+
 def cmd_init(args):
     added = args.st.cmd_init(args.paths)
     log.info("Added %s %s", added, "folder" if added == 1 else "folders")
@@ -141,6 +146,24 @@ def cli():
         help="Add devices to folders",
     )
     accept.add_argument(
+        "device_ids",
+        nargs="+",
+        action=ArgparseList,
+        help="One or more Syncthing device IDs (space or comma-separated)",
+    )
+
+    drop = subparsers.add_parser(
+        "drop", aliases=["remove", "reject"], help="Remove a device from syncweb", func=cmd_drop
+    )
+    drop.add_argument(
+        "--folder-ids",
+        "--folders",
+        "-f",
+        default=[],
+        action=ArgparseList,
+        help="Remove devices from folders",
+    )
+    drop.add_argument(
         "device_ids",
         nargs="+",
         action=ArgparseList,
