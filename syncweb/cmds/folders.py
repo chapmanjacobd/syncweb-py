@@ -51,18 +51,17 @@ def conform_pending_folders(pending):
 def cmd_list_folders(args):
     # device_id = args.st.device_id
 
-    if args.join:
-        # TODO: add option(s) to filter by label, devices, or folder_id
-        args.st.join_pending_folders()
+    if not any([args.joined, args.pending]):
+        args.joined, args.pending = True, True
 
     folders = []
-    if not args.pending:
+    if args.joined:
         folders.extend(args.st.folders())
-    if not args.accepted:
+    if not args.pending:
         folders.extend(conform_pending_folders(args.st.pending_folders()))
 
     if not folders:
-        log.info("No folders configured")
+        log.info("No folders configured or matched")
         return
 
     filtered_folders = []
@@ -150,6 +149,11 @@ def cmd_list_folders(args):
                 "pending": pending,
             }
         )
+
+
+    if args.join:
+        # TODO: add option(s) to filter by label, devices, or folder_id
+        args.st.join_pending_folders()
 
     table_data = [
         {

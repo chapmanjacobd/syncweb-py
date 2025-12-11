@@ -27,19 +27,27 @@ def _calc_rate(prev, curr, dt):
 
 
 def cmd_list_devices(args):
-    if args.accept:
-        args.st.accept_pending_devices(local_only=args.local_only)
+    if not any([args.accepted, args.pending, args.discovered]):
+        args.accepted, args.pending, args.discovered = True, True, True
 
     devices = []
-    if not args.pending:
+    if args.accepted:
         devices.extend(args.st.devices(local_only=args.local_only))
-    if not args.accepted:
+    if args.pending:
         devices.extend(
             [
                 {"deviceID": device_id, **d, "pending": True}
                 for device_id, d in args.st.pending_devices(local_only=args.local_only).items()
             ]
         )
+    if args.discovered:
+        devices.extend(
+            [
+                {"deviceID": device_id, **d, "discovered": True}
+                for device_id, d in args.st.discovered_devices(local_only=args.local_only).items()
+            ]
+        )
+
     device_stats = args.st.device_stats()
 
     if not devices:
@@ -72,21 +80,22 @@ def cmd_list_devices(args):
 
     for device in devices:
         device_id = device.get("deviceID")
-        is_local = device_id == args.st.device_id
+        is_localhost = device_id == args.st.device_id
 
         name = device.get("name", "<no name>")
         paused = device.get("paused") or False
         pending = device.get("pending") or False
+        discovered = device.get("discovered") or False
 
         device_stat = device_stats.get(device_id)
         if device_stat:
             last_seen = device_stat["lastSeen"]
-            last_seen = str_utils.isodate2seconds(last_seen)
             last_duration = device_stat["lastConnectionDurationS"]
         else:  # pending device
             last_seen = device.get("time")
-            last_seen = str_utils.isodate2seconds(last_seen)
             last_duration = 0
+        if last_seen:
+            last_seen = str_utils.isodate2seconds(last_seen)
 
         # Bandwidth limits
         max_send = device.get("maxSendKbps", 0)
@@ -101,8 +110,10 @@ def cmd_list_devices(args):
         conn_b = connections_before.get(device_id)
         conn_a = connections_after.get(device_id)
 
-        if is_local:
+        if is_localhost:
             status = "🏠"
+        elif discovered:
+            status = "🗨️"
         elif paused:
             status = "⏸️"
         elif pending:
@@ -141,6 +152,9 @@ def cmd_list_devices(args):
         headers.append("UL / DL")
 
     print(tabulate(table_data, headers=headers, tablefmt="simple"))
+
+    if args.accept:
+        args.st.accept_devices([r[0] for r in table_data])
 
     if args.xfer and total_up is not None:
         print(f"  |  Total ↑{total_up:.1f} KB/s  ↓{total_down:.1f} KB/s (Δt={dt:.1f}s)")

@@ -173,9 +173,9 @@ def cli():
     folders = subparsers.add_parser(
         "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
     )
+    folders.add_argument("--pending", "--requests", "--requested", "--invites", "--invited", action="store_true", help="Only show pending invited folders")
+    folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
-    folders.add_argument("--pending", "--unknown", action="store_true", help="Only show pending folders")
-    folders.add_argument("--accepted", "--known", action="store_true", help="Only show accepted folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
     folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")
@@ -186,10 +186,11 @@ def cli():
     devices.add_argument(
         "--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics"
     )
+    devices.add_argument("--discovered", "--discovery", "--nearby", action="store_true", help="Only show detected devices loaded from the discovery cache")
+    devices.add_argument("--pending", "--requests", "--requested", "--invites", "--invited", action="store_true", help="Only show devices which have initiated a direct connection request")
+    devices.add_argument("--accepted", "--joined", action="store_true", help="Only show accepted devices")
+    devices.add_argument("--accept", action="store_true", help="Accept filtered devices")
     devices.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
-    devices.add_argument("--pending", "--unknown", action="store_true", help="Only show pending devices")
-    devices.add_argument("--accepted", "--known", action="store_true", help="Only show accepted devices")
-    devices.add_argument("--accept", action="store_true", help="Accept pending devices")
 
     pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
     pause.add_argument("--all", "-a", action="store_true", help="All devices")

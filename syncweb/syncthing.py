@@ -594,7 +594,10 @@ class SyncthingNode(SyncthingNodeXML):
 
     @staticmethod
     def strip_port(s):
-        print(s)
+        # print(s)
+
+        if "://" in s:  # strip scheme
+            s = s[s.find("://") + 3 :]
 
         if s.startswith("[") and s.endswith("]"):
             s = s[1:-1]
@@ -605,7 +608,7 @@ class SyncthingNode(SyncthingNodeXML):
             if last_colon_index != -1:
                 s = s[:last_colon_index]
 
-        print(s)
+        # print(s)
         return s
 
     def pending_devices(self, local_only=False):
@@ -620,6 +623,21 @@ class SyncthingNode(SyncthingNodeXML):
             return local_devices
 
         return self._get("cluster/pending/devices")
+
+    def discovered_devices(self, local_only=False):
+        if local_only:
+            devices = self._get("system/discovery")
+            local_devices = {}
+            for device_id, d in devices.items():
+                for address in (d.get("addresses") or []):
+                    address = self.strip_port(address)
+                    if self.is_local_address(address):
+                        local_devices[device_id] = d
+                        break
+
+            return local_devices
+
+        return self._get("system/discovery")
 
     def pending_folders(self, device_id=None):
         params = {}

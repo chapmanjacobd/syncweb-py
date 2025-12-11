@@ -57,7 +57,7 @@ class Syncweb(SyncthingNode):
             try:
                 device_id = str_utils.extract_device_id(path)
                 self.delete_device(device_id)
-                # self.delete_pending_device(device_id)
+                self.delete_pending_device(device_id)
                 device_count += 1
             except ValueError:
                 log.error("Invalid Device ID %s", path)
@@ -225,30 +225,23 @@ class Syncweb(SyncthingNode):
         except KeyError:
             return f"{short}-???????"
 
-    def accept_pending_devices(self, local_only=False):
-        pending = self.pending_devices(local_only=local_only)
-        if not pending:
-            log.info(f"[%s] No pending devices", self.name)
-            return
-
-        existing_devices = self.devices()
-        existing_device_ids = {d["deviceID"] for d in existing_devices}
-
-        for dev_id, info in pending.items():
-            if dev_id in existing_device_ids:
-                log.info(f"[%s] Device %s already exists!", self.name, dev_id)
+    def accept_devices(self, device_ids):
+        existing_device_ids = {d["deviceID"] for d in self.devices()}
+        for device_id in device_ids:
+            if device_id in existing_device_ids:
+                log.info(f"[%s] Device %s already accepted!", self.name, device_id)
                 continue
 
-            name = info.get("name", dev_id[:7])
-            log.info(f"[%s] Accepting device %s (%s)", self.name, name, dev_id)
+            name = device_id[:7]
+            log.info(f"[%s] Accepting device %s (%s)", self.name, name, device_id)
             cfg = {
-                "deviceID": dev_id,
+                "deviceID": device_id,
                 "name": name,
-                "addresses": info.get("addresses") or [],
+                "addresses": ["dynamic"],
                 "compression": "metadata",
                 "introducer": False,
             }
-            self._put(f"config/devices/{dev_id}", json=cfg)
+            self._put(f"config/devices/{device_id}", json=cfg)
 
     def join_pending_folders(self, folder_id: str | None = None):
         pending = conform_pending_folders(self.pending_folders())
