@@ -629,7 +629,7 @@ class SyncthingNode(SyncthingNodeXML):
             devices = self._get("system/discovery")
             local_devices = {}
             for device_id, d in devices.items():
-                for address in (d.get("addresses") or []):
+                for address in d.get("addresses") or []:
                     address = self.strip_port(address)
                     if self.is_local_address(address):
                         local_devices[device_id] = d

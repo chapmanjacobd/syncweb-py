@@ -173,7 +173,15 @@ def cli():
     folders = subparsers.add_parser(
         "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
     )
-    folders.add_argument("--pending", "--requests", "--requested", "--invites", "--invited", action="store_true", help="Only show pending invited folders")
+    folders.add_argument(
+        "--pending",
+        "--requests",
+        "--requested",
+        "--invites",
+        "--invited",
+        action="store_true",
+        help="Only show pending invited folders",
+    )
     folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
@@ -186,8 +194,22 @@ def cli():
     devices.add_argument(
         "--xfer", nargs="?", const=5, type=int, default=0, help="Wait to calculate transfer statistics"
     )
-    devices.add_argument("--discovered", "--discovery", "--nearby", action="store_true", help="Only show detected devices loaded from the discovery cache")
-    devices.add_argument("--pending", "--requests", "--requested", "--invites", "--invited", action="store_true", help="Only show devices which have initiated a direct connection request")
+    devices.add_argument(
+        "--discovered",
+        "--discovery",
+        "--nearby",
+        action="store_true",
+        help="Only show detected devices loaded from the discovery cache",
+    )
+    devices.add_argument(
+        "--pending",
+        "--requests",
+        "--requested",
+        "--invites",
+        "--invited",
+        action="store_true",
+        help="Only show devices which have initiated a direct connection request",
+    )
     devices.add_argument("--accepted", "--joined", action="store_true", help="Only show accepted devices")
     devices.add_argument("--accept", action="store_true", help="Accept filtered devices")
     devices.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
@@ -351,6 +373,25 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
 
 (default: "balanced,frecency")""",
     )
+    sort.add_argument(
+        "--depth",
+        "-d",
+        "--levels",
+        action="append",
+        default=[],
+        metavar="N",
+        help="""Constrain folder aggregates by folder depth
+-d 2         # Aggregate only folders at depth 2
+-d=+2        # Aggregate folders at depth 2 and deeper (min_depth=2)
+-d=-2        # Aggregate folders up to depth 2 (max_depth=2)
+-d=+1 -d=-3  # Aggregate folders from depth 1 to 3
+
+By default only the immediate parent folder is used for folder aggregation
+but when this is specified children affect all ancestors
+""",
+    )
+    sort.add_argument("--min-depth", type=int, default=0, metavar="N", help="Alternative depth notation")
+    sort.add_argument("--max-depth", type=int, default=None, metavar="N", help="Alternative depth notation")
     sort.add_argument("paths", nargs="*", default=STDIN_DASH, action=ArgparseArgsOrStdin, help="File paths to sort")
 
     download = subparsers.add_parser(

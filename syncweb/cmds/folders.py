@@ -150,7 +150,6 @@ def cmd_list_folders(args):
             }
         )
 
-
     if args.join:
         # TODO: add option(s) to filter by label, devices, or folder_id
         args.st.join_pending_folders()

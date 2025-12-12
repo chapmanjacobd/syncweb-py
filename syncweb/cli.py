@@ -27,7 +27,7 @@ class ArgparseArgsOrStdin(argparse.Action):
             print(f"{parser.prog}: Reading from stdin...", file=sys.stderr)
             lines = sys.stdin.readlines()
             if not lines or (len(lines) == 1 and lines[0].strip() == ""):
-                lines = None
+                lines = []
             else:
                 lines = [s.strip() for s in lines]
         else:
