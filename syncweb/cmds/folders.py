@@ -6,6 +6,7 @@ from datetime import datetime
 
 from tabulate import tabulate
 
+from syncweb import str_utils
 from syncweb.log_utils import log
 from syncweb.str_utils import file_size
 
@@ -49,8 +50,6 @@ def conform_pending_folders(pending):
 
 
 def cmd_list_folders(args):
-    # device_id = args.st.device_id
-
     if not any([args.joined, args.pending]):
         args.joined, args.pending = True, True
 
@@ -73,10 +72,11 @@ def cmd_list_folders(args):
         status = "⏸️" if paused else ""
         pending = folder.get("pending") or False
 
-        # url = f"sync://{folder_id}#{device_id}"
-        # if pending:
-        #     url = f"sync://{folder_id}#{folder.get('devices')[0]}"
-        # print(url)
+        if args.print:
+            url = f"sync://{folder_id}#{args.st.device_id}"
+            if pending:
+                url = f"sync://{folder_id}#{folder.get('devices')[0]}"
+            str_utils.pipe_print(url)
 
         fs = {}
         if not pending:
@@ -180,8 +180,8 @@ def cmd_list_folders(args):
         for d in filtered_folders
     ]
 
-    print()
-    print(tabulate(table_data, headers="keys", tablefmt="simple"))
+    if not args.print:
+        print(tabulate(table_data, headers="keys", tablefmt="simple"))
 
     if args.delete_files:
         print()

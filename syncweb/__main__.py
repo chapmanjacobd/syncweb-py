@@ -187,6 +187,7 @@ def cli():
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
     folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")
+    folders.add_argument("--print", action="store_true", help="Only print folder ids")
 
     devices = subparsers.add_parser(
         "devices", aliases=["list-devices", "lsd"], help="List Syncthing devices", func=cmd_list_devices
@@ -213,6 +214,7 @@ def cli():
     devices.add_argument("--accepted", "--joined", action="store_true", help="Only show accepted devices")
     devices.add_argument("--accept", action="store_true", help="Accept filtered devices")
     devices.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
+    devices.add_argument("--print", action="store_true", help="Only print device ids")
 
     pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
     pause.add_argument("--all", "-a", action="store_true", help="All devices")

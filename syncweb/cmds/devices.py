@@ -145,23 +145,26 @@ def cmd_list_devices(args):
 
         table_data.append(row)
 
-    headers = [
-        "Device ID",
-        "Name",
-        "Last Seen",
-        "Duration",
-        "Bandwidth Limit",
-    ]
+    device_ids = [r[0] for r in table_data]
 
-    if args.xfer:
-        headers.append("UL / DL")
+    if args.print:
+        for device_id in device_ids:
+            str_utils.pipe_print(device_id)
+    else:
+        headers = [
+            "Device ID",
+            "Name",
+            "Last Seen",
+            "Duration",
+            "Bandwidth Limit",
+        ]
+        if args.xfer:
+            headers.append("UL / DL")
 
-    print(tabulate(table_data, headers=headers, tablefmt="simple"))
+        print(tabulate(table_data, headers=headers, tablefmt="simple"))
+
+        if args.xfer and total_up is not None:
+            print(f"  |  Total ↑{total_up:.1f} KB/s  ↓{total_down:.1f} KB/s (Δt={dt:.1f}s)")
 
     if args.accept:
-        args.st.accept_devices([r[0] for r in table_data])
-
-    if args.xfer and total_up is not None:
-        print(f"  |  Total ↑{total_up:.1f} KB/s  ↓{total_down:.1f} KB/s (Δt={dt:.1f}s)")
-    else:
-        print()
+        args.st.accept_devices(device_ids)
