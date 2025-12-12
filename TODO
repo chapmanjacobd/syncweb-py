@@ -8,6 +8,4 @@ sort by Wikipedia Importance
 count of available seeds in ls or stat
 multiple versions data as a user flag in ls
 
-syncthing generate config.xml before release to see any changes made
-
 automap: add device to (virtual?) folder id, if too many file conflicts treat as new folder, otherwise merge
