@@ -236,7 +236,7 @@ class Syncweb(SyncthingNode):
             log.info(f"[%s] Accepting device %s (%s)", self.name, name, device_id)
             cfg = {
                 "deviceID": device_id,
-                "name": name,
+                # "name": name,
                 "addresses": ["dynamic"],
                 "compression": "metadata",
                 "introducer": False,

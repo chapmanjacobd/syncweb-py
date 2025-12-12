@@ -32,7 +32,7 @@ def cmd_list_devices(args):
 
     devices = []
     if args.accepted:
-        devices.extend(args.st.devices(local_only=args.local_only))
+        devices.extend(sorted(args.st.devices(local_only=args.local_only), key=lambda d: d["deviceID"] != args.st.device_id))
     if args.pending:
         devices.extend(
             [
@@ -78,8 +78,13 @@ def cmd_list_devices(args):
     connections_before = conn_before.get("connections", {})
     connections_after = conn_after.get("connections", {})
 
+    seen_devices = set()
     for device in devices:
         device_id = device.get("deviceID")
+        if device_id in seen_devices:
+            continue
+        seen_devices.add(device_id)
+
         is_localhost = device_id == args.st.device_id
 
         name = device.get("name", "<no name>")

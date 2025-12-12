@@ -266,7 +266,7 @@ def cli():
     ls.add_argument("--no-header", action="store_true", help="suppress header in long format")
     ls.add_argument("paths", nargs="*", default=["."], help="Path relative to the root")
 
-    # subparsers.add_parser("cd", help="Change directory helper")
+    # TODO: subparsers.add_parser("cd", help="Change directory helper")
 
     find = subparsers.add_parser(
         "find", aliases=["fd", "search"], help="Search for files by filename, size, and modified date", func=cmd_find
