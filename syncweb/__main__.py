@@ -375,6 +375,9 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
 
 (default: "balanced,frecency")""",
     )
+    sort.add_argument("--min-seeders", "--min-copies", type=int, default=0, metavar="N", help="Filter files with fewer than N seeders")
+    sort.add_argument("--max-seeders", "--max-copies", type=int, default=None, metavar="N", help="Filter files with more than N seeders")
+    sort.add_argument("--limit-size", "-TS", "-LS", metavar="SIZE", help="Quit after printing N bytes")
     sort.add_argument(
         "--depth",
         "-d",

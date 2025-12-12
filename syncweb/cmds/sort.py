@@ -9,7 +9,7 @@ from syncweb.cmds.find import parse_depth_constraints
 from syncweb.cmds.ls import path2fid
 from syncweb.consts import APPLICATION_START
 from syncweb.log_utils import log
-from syncweb.str_utils import pipe_print
+from syncweb.str_utils import human_to_bytes, pipe_print
 
 
 def aggregate_folders(records, output_aggregates, min_depth=None, max_depth=None):
@@ -150,6 +150,8 @@ def cmd_sort(args) -> None:
         args.sort = ["balanced", "frecency"]
     args.sort = [s.lower() for s in args.sort]
 
+    args.limit_size = human_to_bytes(args.limit_size) if args.limit_size else None
+
     args.min_depth, args.max_depth = parse_depth_constraints(args.depth, args.min_depth, args.max_depth)
 
     data = []
@@ -169,6 +171,12 @@ def cmd_sort(args) -> None:
 
         if not file_data:
             log.error("%s: No such file or directory", shlex.quote(path))
+            continue
+
+        file_data["num_peers"] = len(file_data.pop("availability", None) or [])
+        if args.min_seeders and file_data["num_peers"] < args.min_seeders:
+            continue
+        if args.max_seeders is not None and args.max_seeders < file_data["num_peers"]:
             continue
 
         file_data_global = file_data.pop("global", None) or {}
@@ -195,7 +203,6 @@ def cmd_sort(args) -> None:
 
         file_data["path"] = path
         file_data["modified"] = str_utils.isodate2seconds(file_data["modified"])
-        file_data["num_peers"] = len(file_data.pop("availability", None) or [])
         data.append(file_data)
 
     folder_aggregates = aggregate_folders(
@@ -203,6 +210,13 @@ def cmd_sort(args) -> None:
     )
 
     data = sorted(data, key=make_sort_key(folder_aggregates, args.sort))
+    SIZE_USED = 0
     for d in data:
+        if args.limit_size:
+            file_size = d["size"]
+            if SIZE_USED + file_size > args.limit_size:
+                break
+            SIZE_USED += file_size
+
         # print(make_sort_key(folder_aggregates, args.sort)(d), d["path"])
         pipe_print(d["path"])

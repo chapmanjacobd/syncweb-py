@@ -1,9 +1,5 @@
 automated experiment
 
-sort --limit --size-limit
-sort --min-copies --max-copies
-only download files that have fewer than N copies; like git annex numcopies
-
 simplified wishlist parsing
 
 sort by Wikipedia Importance
