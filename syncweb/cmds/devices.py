@@ -32,7 +32,9 @@ def cmd_list_devices(args):
 
     devices = []
     if args.accepted:
-        devices.extend(sorted(args.st.devices(local_only=args.local_only), key=lambda d: d["deviceID"] != args.st.device_id))
+        devices.extend(
+            sorted(args.st.devices(local_only=args.local_only), key=lambda d: d["deviceID"] != args.st.device_id)
+        )
     if args.pending:
         devices.extend(
             [

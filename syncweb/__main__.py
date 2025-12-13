@@ -14,7 +14,7 @@ from syncweb.cmds.stat import cmd_stat
 from syncweb.log_utils import log
 from syncweb.syncweb import Syncweb
 
-__version__ = "0.0.14"
+__version__ = "0.0.15"
 
 
 def cmd_version(args):
@@ -375,8 +375,17 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
 
 (default: "balanced,frecency")""",
     )
-    sort.add_argument("--min-seeders", "--min-copies", type=int, default=0, metavar="N", help="Filter files with fewer than N seeders")
-    sort.add_argument("--max-seeders", "--max-copies", type=int, default=None, metavar="N", help="Filter files with more than N seeders")
+    sort.add_argument(
+        "--min-seeders", "--min-copies", type=int, default=0, metavar="N", help="Filter files with fewer than N seeders"
+    )
+    sort.add_argument(
+        "--max-seeders",
+        "--max-copies",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Filter files with more than N seeders",
+    )
     sort.add_argument("--limit-size", "-TS", "-LS", metavar="SIZE", help="Quit after printing N bytes")
     sort.add_argument(
         "--depth",
