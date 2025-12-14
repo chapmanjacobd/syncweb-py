@@ -56,7 +56,7 @@ def cmd_list_folders(args):
     folders = []
     if args.joined:
         folders.extend(args.st.folders())
-    if not args.pending:
+    if args.pending:
         folders.extend(conform_pending_folders(args.st.pending_folders()))
 
     if not folders:
@@ -67,7 +67,7 @@ def cmd_list_folders(args):
     for folder in folders:
         folder_id = folder.get("id")
         label = folder.get("label")
-        path = folder.get("path")
+        path = folder.get("path") or folder.get("devices")[0]
         paused = folder.get("paused") or False
         status = "⏸️" if paused else ""
         pending = folder.get("pending") or False
@@ -124,7 +124,7 @@ def cmd_list_folders(args):
         device_count = len(devices) - (0 if pending else 1)
 
         free_space = None
-        if os.path.exists(path):
+        if path and os.path.exists(path):
             disk_info = shutil.disk_usage(path)
             if disk_info:
                 free_space = file_size(disk_info.free)

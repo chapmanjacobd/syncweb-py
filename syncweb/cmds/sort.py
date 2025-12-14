@@ -87,17 +87,17 @@ def aggregate_folders(records, output_aggregates, min_depth=None, max_depth=None
     return results
 
 
-def make_sort_key(folder_aggregates, sort_modes):
+def make_sort_key(args, folder_aggregates):
     rand_map = {}  # stable random order per file
 
     def days(modified_time):
-        return (APPLICATION_START - modified_time) / 86400.0
+        return int((APPLICATION_START - modified_time) / 86400.0)
 
     def sort_key(file_data):
         folder_aggregate = folder_aggregates.get(os.path.dirname(file_data["path"].rstrip("/")))
 
         key = []
-        for mode in sort_modes:
+        for mode in args.sort:
             reverse = False
             if mode.startswith("-"):
                 mode = mode[1:]
@@ -107,18 +107,16 @@ def make_sort_key(folder_aggregates, sort_modes):
             match mode:
                 case "popular" | "popularity" | "peers" | "seeds":
                     value = file_data["num_peers"]
-                case "recent" | "date":
+                case "date":
                     value = -days(file_data["modified"])
-                case "old":
-                    value = days(file_data["modified"])
                 case "time":
-                    value = -file_data["modified"]
+                    value = file_data["modified"]
                 case "size":
                     value = file_data["size"]
-                case "balanced":
-                    value = -abs(file_data["num_peers"] - 3)
+                case "niche":
+                    value = -abs(file_data["num_peers"] - args.niche)
                 case "frecency":  # popular + recent
-                    value = file_data["num_peers"] - (days(file_data["modified"]) / 3)
+                    value = -(file_data["num_peers"] - (days(file_data["modified"]) / args.frecency_weight))
                 case "random":
                     value = rand_map.setdefault(id(file_data), random.random())
                 case "folder-size" | "foldersize":
@@ -128,7 +126,7 @@ def make_sort_key(folder_aggregates, sort_modes):
                 case "folder-date" | "folderdate":
                     value = -days(folder_aggregate["modified_median"]) if folder_aggregate else None
                 case "folder-time" | "foldertime":
-                    value = -folder_aggregate["modified_median"] if folder_aggregate else None
+                    value = folder_aggregate["modified_median"] if folder_aggregate else None
                 case "count" | "file-count":
                     value = folder_aggregate["file_count"] if folder_aggregate else None
                 case _:
@@ -147,7 +145,7 @@ def make_sort_key(folder_aggregates, sort_modes):
 
 def cmd_sort(args) -> None:
     if not args.sort:
-        args.sort = ["balanced", "frecency"]
+        args.sort = ["niche", "frecency"]
     args.sort = [s.lower() for s in args.sort]
 
     args.limit_size = human_to_bytes(args.limit_size) if args.limit_size else None
@@ -209,7 +207,7 @@ def cmd_sort(args) -> None:
         data, ["modified_median", "size_median", "size_sum"], args.min_depth, args.max_depth
     )
 
-    data = sorted(data, key=make_sort_key(folder_aggregates, args.sort))
+    data = sorted(data, key=make_sort_key(args, folder_aggregates))
     SIZE_USED = 0
     for d in data:
         if args.limit_size:
@@ -218,5 +216,5 @@ def cmd_sort(args) -> None:
                 break
             SIZE_USED += file_size
 
-        # print(make_sort_key(folder_aggregates, args.sort)(d), d["path"])
+        print(make_sort_key(args, folder_aggregates)(d), d["path"])
         pipe_print(d["path"])
