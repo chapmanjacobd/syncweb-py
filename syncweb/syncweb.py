@@ -1,7 +1,6 @@
 import os
 
 from syncweb import str_utils
-from syncweb.cmds.folders import conform_pending_folders
 from syncweb.log_utils import log
 from syncweb.syncthing import SyncthingNode
 
@@ -242,44 +241,3 @@ class Syncweb(SyncthingNode):
                 "introducer": False,
             }
             self._put(f"config/devices/{device_id}", json=cfg)
-
-    def join_pending_folders(self, folder_id: str | None = None):
-        pending = conform_pending_folders(self.pending_folders())
-        if not pending:
-            log.info(f"[%s] No pending folders", self.name)
-            return
-        if folder_id:
-            pending = [f for f in pending if f["id"] == folder_id]
-            if not pending:
-                log.info(f"[%s] No pending folders matching '%s'", self.name, folder_id)
-                return
-
-        existing_folders = self.folders()
-        existing_folder_ids = {f["id"]: f for f in existing_folders}
-
-        for folder in pending:
-            fid = folder["id"]
-            offered_by = folder.get("offeredBy", {}) or {}
-            device_ids = list(offered_by.keys())
-
-            if not device_ids:
-                log.info(f"[%s] No devices offering folder '%s'", self.name, fid)
-                continue
-
-            if fid in existing_folder_ids:  # folder exists; just add new devices
-                self.add_folder_devices(fid, device_ids)
-                # pause and resume devices to unstuck them (ie. "Unexpected folder ID in ClusterConfig")
-                for device_id in device_ids:
-                    self.pause(device_id)
-                for device_id in device_ids:
-                    self.resume(device_id)
-            else:  # folder doesn't exist; create it (with devices)
-                log.info(f"[%s] Creating folder '%s'", self.name, fid)
-                cfg = {
-                    "id": fid,
-                    "label": fid,
-                    "path": str(self.home / fid),
-                    "type": "receiveonly",  # TODO: think
-                    "devices": [{"deviceID": d} for d in device_ids],
-                }
-                self._post("config/folders", json=cfg)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os, shutil
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 
 from tabulate import tabulate
@@ -42,7 +42,6 @@ def conform_pending_folders(pending):
                 "receiveEncrypted": any(recv_enc),
                 "remoteEncrypted": any(remote_enc),
                 "devices": device_ids,
-                "pending": True,
             }
         )
 
@@ -50,27 +49,45 @@ def conform_pending_folders(pending):
 
 
 def cmd_list_folders(args):
-    if not any([args.joined, args.pending]):
-        args.joined, args.pending = True, True
+    if not any([args.joined, args.pending, args.discovered]):
+        args.joined, args.pending, args.discovered = True, True, True
+
+    existing_folders = args.st.folders()
+    existing_folder_ids = {f["id"]: f for f in existing_folders}
+
+    pending_folders = []
+    if args.pending or args.discovered:
+        pending_folders = conform_pending_folders(args.st.pending_folders())
 
     folders = []
     if args.joined:
-        folders.extend(args.st.folders())
+        folders.extend(existing_folders)
     if args.pending:
-        folders.extend(conform_pending_folders(args.st.pending_folders()))
+        folders.extend([{**d, "pending": True} for d in pending_folders if d["id"] in existing_folder_ids])
+    if args.discovered:
+        folders.extend([{**d, "discovered": True} for d in pending_folders if d["id"] not in existing_folder_ids])
 
     if not folders:
         log.info("No folders configured or matched")
         return
 
+    pending_device_folders_count = defaultdict(int)
+    for d in folders:
+        if d.get("pending"):
+            pending_device_folders_count[d[id]] += 1
+
     filtered_folders = []
     for folder in folders:
         folder_id = folder.get("id")
         label = folder.get("label")
-        path = folder.get("path") or folder.get("devices")[0]
+        path = folder.get("path")
         paused = folder.get("paused") or False
         status = "⏸️" if paused else ""
         pending = folder.get("pending") or False
+        discovered = folder.get("discovered") or False
+
+        if discovered:
+            path = folder.get("devices")[0]
 
         if args.print:
             url = f"sync://{folder_id}#{args.st.device_id}"
@@ -111,17 +128,19 @@ def cmd_list_folders(args):
         err_count = fs.get("errors")
         pull_errors = fs.get("pullErrors")
         err_msg = fs.get("error") or fs.get("invalid") or ""
-        err_display = []
+        err_fmt = []
         if err_count:
-            err_display.append(f"errors:{err_count}")
+            err_fmt.append(f"errors:{err_count}")
         if pull_errors:
-            err_display.append(f"pull:{pull_errors}")
+            err_fmt.append(f"pull:{pull_errors}")
         if err_msg:
-            err_display.append(err_msg.strip())
-        err_display = ", ".join(err_display) or "-"
+            err_fmt.append(err_msg.strip())
+        err_fmt = ", ".join(err_fmt) or "-"
 
         devices = folder.get("devices") or []
-        device_count = len(devices) - (0 if pending else 1)
+        device_count_fmt = f"{len(devices)}"
+        if pending_device_folders_count.get(folder_id):
+            device_count_fmt += f" ({pending_device_folders_count[folder_id]})"
 
         free_space = None
         if path and os.path.exists(path):
@@ -144,15 +163,11 @@ def cmd_list_folders(args):
                 "status": status,
                 "sync_pct": sync_pct,
                 "state": state,
-                "device_count": device_count,
-                "err_display": err_display,
+                "device_count_fmt": device_count_fmt,
+                "err_fmt": err_fmt,
                 "pending": pending,
             }
         )
-
-    if args.join:
-        # TODO: add option(s) to filter by label, devices, or folder_id
-        args.st.join_pending_folders()
 
     table_data = [
         {
@@ -174,10 +189,13 @@ def cmd_list_folders(args):
             ),
             "Free": d["free_space"] or "-",
             "Sync Status": "%s %.0f%% %s" % (d["status"], d["sync_pct"], d["state"]),
-            "Peers": d["device_count"],
-            "Errors": d["err_display"],
+            "Peers": d["device_count_fmt"],
+            "Errors": d["err_fmt"],
         }
         for d in filtered_folders
+        # for existing pending folders just show the number of devices
+        # that want to join the folder (pending_device_folders_count)
+        if not args.joined or (args.joined and not d["pending"])
     ]
 
     if not args.print:
@@ -195,3 +213,36 @@ def cmd_list_folders(args):
                 args.st.delete_pending_folder(filtered_folder["folder_id"])
             else:
                 args.st.delete_folder(filtered_folder["folder_id"])
+
+    if args.join:
+        pending_folders = [d for d in filtered_folders if d.get('pending') or d.get('discovered')]
+        if not pending_folders:
+            log.info(f"[%s] No pending folders", args.st.name)
+            return
+
+        for folder in pending_folders:
+            folder_id = folder["id"]
+            offered_by = folder.get("offeredBy", {}) or {}
+            device_ids = list(offered_by.keys())
+
+            if not device_ids:
+                log.error(f"[%s] No devices offering folder '%s'", args.st.name, folder_id)
+                continue
+
+            if folder_id in existing_folder_ids:  # folder exists; just add new devices
+                args.st.add_folder_devices(folder_id, device_ids)
+                # pause and resume devices to unstuck them (ie. "Unexpected folder ID in ClusterConfig")
+                for device_id in device_ids:
+                    args.st.pause(device_id)
+                for device_id in device_ids:
+                    args.st.resume(device_id)
+            else:  # folder doesn't exist; create it (with devices)
+                log.info(f"[%s] Creating folder '%s'", args.st.name, folder_id)
+                cfg = {
+                    "id": folder_id,
+                    "label": folder_id,
+                    "path": str(args.st.home / folder_id),
+                    "type": "receiveonly",
+                    "devices": [{"deviceID": d} for d in device_ids],
+                }
+                args.st._post("config/folders", json=cfg)

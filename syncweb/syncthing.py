@@ -198,7 +198,7 @@ class SyncthingNodeXML:
             },
         )
         folder["filesystemType"] = "fake" if is_fakefs else "basic"
-        folder["minDiskFree"] = {"@unit": "%", "#text": "1"}
+        folder["minDiskFree"] = {"@unit": "MB", "#text": "2000"}
         versioning = folder.append("versioning")
         versioning["cleanupIntervalS"] = "3600"
         versioning["fsPath"] = ""

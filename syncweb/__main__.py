@@ -172,6 +172,13 @@ def cli():
         "folders", aliases=["list-folders", "lsf"], help="List Syncthing folders", func=cmd_list_folders
     )
     folders.add_argument(
+        "--discovered",
+        "--discovery",
+        "--new",
+        action="store_true",
+        help="Only show new folders shared by other devices",
+    )
+    folders.add_argument(
         "--pending",
         "--requests",
         "--requested",
@@ -181,7 +188,7 @@ def cli():
         help="Only show pending invited folders",
     )
     folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
-    folders.add_argument("--join", "--accept", action="store_true", help="Join pending folders")
+    folders.add_argument("--join", "--accept", action="store_true", help="Join pending and/or discovered folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
     folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")
