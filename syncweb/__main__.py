@@ -386,6 +386,18 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
         metavar="N",
         help="Filter files with more than N seeders",
     )
+    sort.add_argument(
+        "--niche",
+        type=int,
+        default=3,
+        help="The ideal popularity (number of peers) used to calculate the niche sort value. Files closer to this number get a higher score",
+    )
+    sort.add_argument(
+        "--frecency-weight",
+        type=int,
+        default=3,
+        help="Divisor used to weigh the recency component (days since modified) in the frecency calculation. A smaller number gives more weight to recency",
+    )
     sort.add_argument("--limit-size", "-TS", "-LS", metavar="SIZE", help="Quit after printing N bytes")
     sort.add_argument(
         "--depth",
