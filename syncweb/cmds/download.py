@@ -7,10 +7,8 @@ from syncweb import str_utils
 from syncweb.cmds.ls import is_directory, path2fid
 from syncweb.log_utils import log
 
-# TODO: add --timeout-size and quantity limits
-# add option to truncate to free_space - buffer limit
-
-# TODO: ignore existing files and pending downloads
+# TODO: count pending downloads against free space
+# TODO: don't count existing files against free space
 
 
 def collect_files(args, items, current_path=""):
@@ -345,7 +343,7 @@ def print_download_summary(args, plan) -> bool:
 
     # Print warnings
     if warnings:
-        print("\nWARNINGS:")
+        print("\nWARNING: Insufficient space!")
         for warning in warnings:
             print(f"  {warning}")
         print()
@@ -353,10 +351,9 @@ def print_download_summary(args, plan) -> bool:
     if args.no_confirm:
         return True
 
-    warning_suffix = " (WARNING: Insufficient space!)" if warnings else ""
     try:
         response = input(
-            f"\nMark {grand_total_files} files ({str_utils.file_size(grand_total_size)}) for download?{warning_suffix} [y/N]: "
+            f"\nMark {grand_total_files} files ({str_utils.file_size(grand_total_size)}) for download? [y/N]: "
         )
         return response.lower() in ("y", "yes")
     except (KeyboardInterrupt, EOFError):

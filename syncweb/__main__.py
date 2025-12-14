@@ -108,8 +108,6 @@ def cli():
         action=argparse.BooleanOptionalAction,
         default=True,
     )
-    parser.add_argument("--simulate", "--dry-run", action="store_true")
-    parser.add_argument("--no-confirm", "--yes", "-y", action="store_true")
 
     subparsers = SubParser(parser, default_command="help", version=__version__)
 
@@ -426,6 +424,7 @@ but when this is specified children affect all ancestors
         help="Mark file paths for download/sync",
         func=cmd_download,
     )
+    download.add_argument("--no-confirm", "--yes", "-y", action="store_true")
     download.add_argument("--depth", type=int, help="Maximum depth for directory traversal")
     download.add_argument(
         "paths",
