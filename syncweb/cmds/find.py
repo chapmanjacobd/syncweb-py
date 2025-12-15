@@ -7,9 +7,6 @@ from syncweb.cmds.ls import folder_size, is_directory
 from syncweb.log_utils import log
 from syncweb.str_utils import human_to_bytes, human_to_seconds, isodate2seconds, parse_human_to_lambda, pipe_print
 
-# TODO:
-# add --full-path filtering
-
 
 def parse_depth_constraints(depth_list: List[str], min_depth=0, max_depth=None) -> tuple[int, int | None]:
     for s in depth_list:
@@ -32,49 +29,59 @@ def parse_depth_constraints(depth_list: List[str], min_depth=0, max_depth=None) 
     return min_depth, max_depth
 
 
-def regex_match(name: str, pattern: str, ignore_case: bool) -> bool:
-    if pattern == ".*":
-        return True
+def split_pattern(pattern: str) -> List[str]:
+    return shlex.split(pattern) if pattern else []
 
+
+
+def regex_match(name: str, patterns: List[str], ignore_case: bool) -> bool:
     flags = re.IGNORECASE if ignore_case else 0
 
+    for pattern in patterns:
+        if pattern == ".*":
+            continue  # Match-all pattern, skip
+
+        try:
+            if not re.search(pattern, name, flags):
+                return False
+        except re.error:  # invalid regex
+            return False
+
+    return True
+
+
+def exact_match(name: str, patterns: List[str], ignore_case: bool) -> bool:
+    search_name = name.lower() if ignore_case else name
+
+    for pattern in patterns:
+        search_pattern = pattern.lower() if ignore_case else pattern
+        if search_pattern not in search_name:
+            return False
+
+    return True
+
+
+def glob_match(name: str, patterns: List[str], ignore_case: bool) -> bool:
     try:
-        if re.search(pattern, name, flags):
-            return True
-    except re.error:  # invalid regex
-        pass
-
-    return False
-
-
-def exact_match(name: str, pattern: str, ignore_case: bool) -> bool:
-    if ignore_case:
-        if pattern.lower() in name.lower():
-            return True
-    else:
-        if pattern in name:
-            return True
-
-    return False
-
-
-def glob_match(name: str, pattern: str, ignore_case: bool) -> bool:
-    try:
-        if ignore_case:
-            if fnmatch.fnmatchcase(name.lower(), pattern.lower()):
-                return True
-        else:
-            if fnmatch.fnmatchcase(name, pattern):
-                return True
+        for pattern in patterns:
+            if ignore_case:
+                if not fnmatch.fnmatchcase(name.lower(), pattern.lower()):
+                    return False
+            else:
+                if not fnmatch.fnmatchcase(name, pattern):
+                    return False
+        return True
     except Exception as e:
         log.debug("glob failed, %s", e)
+        return False
 
-    return False
 
-
-def matches_constraints(args, item: dict, current_depth: int) -> bool:
+def matches_constraints(args, item: dict, current_depth: int, item_path: str = "") -> bool:
     name = item.get("name", "")
     is_dir = is_directory(item)
+
+    # Use full path or just filename for pattern matching
+    search_target = item_path if args.full_path else name
 
     if args.type:
         if args.type == "d" and not is_dir:
@@ -107,13 +114,13 @@ def matches_constraints(args, item: dict, current_depth: int) -> bool:
             return False
 
     if args.fixed_strings:
-        if not exact_match(name, args.pattern, args.ignore_case):
+        if not exact_match(search_target, args.patterns, args.ignore_case):
             return False
     elif args.glob:
-        if not glob_match(name, args.pattern, args.ignore_case):
+        if not glob_match(search_target, args.patterns, args.ignore_case):
             return False
     else:
-        if not regex_match(name, args.pattern, args.ignore_case):
+        if not regex_match(search_target, args.patterns, args.ignore_case):
             return False
 
     return True
@@ -125,7 +132,7 @@ def find_files(args, items, current_path: str | None = "", current_depth: int = 
         item_path = f"{current_path}/{name}" if current_path else name
 
         is_dir = is_directory(item)
-        if matches_constraints(args, item, current_depth):
+        if matches_constraints(args, item, current_depth, item_path):
             if is_dir and log_utils.is_terminal:
                 yield f"{item_path}/"
             else:
@@ -180,6 +187,8 @@ def cmd_find(args) -> None:
     args.time_modified.extend(["+" + s.lstrip("+").lstrip("-") for s in args.modified_before])
     if args.time_modified:
         args.time_modified = parse_human_to_lambda(human_to_seconds, args.time_modified)
+
+    args.patterns = split_pattern(args.pattern)
 
     if args.case_sensitive:
         args.ignore_case = False

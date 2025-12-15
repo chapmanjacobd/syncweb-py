@@ -282,6 +282,7 @@ def cli():
     find.add_argument("--case-sensitive", "-s", action="store_true", help="Case sensitive search")
     find.add_argument("--fixed-strings", "-F", action="store_true", help="Treat all patterns as literals")
     find.add_argument("--glob", "-g", action="store_true", help="Glob-based search")
+    find.add_argument("--full-path", "-p", action="store_true", help="Search full abs. path (default: filename only)")
     find.add_argument("--hidden", "-H", action="store_true", help="Search hidden files and directories")
     find.add_argument("--type", "-t", choices=["f", "d"], help="Filter by type: f=file, d=directory")
     find.add_argument("--follow-links", "-L", action="store_true", help="Follow symbolic links")
