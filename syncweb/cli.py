@@ -24,7 +24,7 @@ class ArgparseList(argparse.Action):
 class ArgparseArgsOrStdin(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if values == STDIN_DASH:
-            print(f"{parser.prog}: Reading from stdin...", file=sys.stderr)
+            log.info("%s: Reading from stdin...", parser.prog)
             lines = sys.stdin.readlines()
             if not lines or (len(lines) == 1 and lines[0].strip() == ""):
                 lines = []

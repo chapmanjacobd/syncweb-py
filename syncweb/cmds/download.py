@@ -175,6 +175,10 @@ def build_download_plan(args, paths):
         if not prefix:
             log.warning("%s: is not a relative path. Including all files in %s...", path, folder_id)
             prefix = "/"
+        else:  # prefix
+            if abs_path.exists() and not abs_path.is_dir() and abs_path.stat().st_size > 0:
+                log.debug("%s: already exists...", path)
+                continue
 
         file_data = args.st.file(folder_id, prefix)
         if file_data and file_data["global"]["type"] != "FILE_INFO_TYPE_DIRECTORY":
@@ -195,7 +199,6 @@ def build_download_plan(args, paths):
 
 def print_download_summary(args, plan) -> bool:
     if not plan:
-        log.info("No files to download")
         return False
 
     # Calculate totals per folder
@@ -375,7 +378,7 @@ def cmd_download(args):
     plan = build_download_plan(args, args.paths)
 
     if not plan:
-        log.error("No files found to download")
+        log.info("No files found to download")
         raise SystemExit(0)
 
     # Show summary and get confirmation

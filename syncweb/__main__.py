@@ -289,6 +289,7 @@ def cli():
     find.add_argument("--type", "-t", choices=["f", "d"], help="Filter by type: f=file, d=directory")
     find.add_argument("--follow-links", "-L", action="store_true", help="Follow symbolic links")
     find.add_argument("--absolute-path", "-a", action="store_true", help="Print absolute paths")
+    find.add_argument("--downloadable", "--download", "-dl", action="store_true", help="Exclude sendonly folders")
     find.add_argument(
         "--depth",
         "-d",
