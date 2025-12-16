@@ -189,6 +189,7 @@ def cli():
     )
     folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending and/or discovered folders")
+    folders.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
     folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")

@@ -14,6 +14,14 @@ Syncweb is not a physical network, but rather a logical network resting on top o
 pip install syncweb
 ```
 
+### Install syncweb-automatic (optional)
+
+Syncweb-automatic is an optional daemon that will auto-accept new local devices and their folders
+
+```sh
+curl -s https://raw.githubusercontent.com/chapmanjacobd/syncweb-py/refs/heads/main/examples/install.sh | bash
+```
+
 ## Usage
 
 Start your syncweb cluster by creating your first folder (can be an existing folder)

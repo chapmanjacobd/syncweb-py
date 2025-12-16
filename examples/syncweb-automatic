@@ -7,7 +7,7 @@ while true; do
     sleep 5
 
     # Join pending folders
-    syncweb folders --pending --join
+    syncweb folders --local-only --pending --join
 
     sleep 10
 

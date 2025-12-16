@@ -41,7 +41,7 @@ def conform_pending_folders(pending):
                 "max_time": max_time,
                 "receiveEncrypted": any(recv_enc),
                 "remoteEncrypted": any(remote_enc),
-                "devices": device_ids,
+                "pending_devices": device_ids,
             }
         )
 
@@ -53,94 +53,58 @@ def cmd_list_folders(args):
         args.joined, args.pending, args.discovered = True, True, True
 
     existing_folders = args.st.folders()
-    existing_folder_ids = {f["id"]: f for f in existing_folders}
+    existing_folder_ids = {d["id"]: d for d in existing_folders}
+    for d in existing_folders:
+        d['devices'] = [dd["deviceID"] for dd in d['devices']]
 
     pending_folders = []
     if args.pending or args.discovered:
         pending_folders = conform_pending_folders(args.st.pending_folders())
 
-    folders = []
+    folders = {}
     if args.joined:
-        folders.extend(existing_folders)
+        for d in existing_folders:
+            folders[d["id"]] = d
     if args.pending:
-        folders.extend([{**d, "pending": True} for d in pending_folders if d["id"] in existing_folder_ids])
+        for d in pending_folders:
+            if d["id"] in existing_folder_ids:
+                folders[d["id"]]["pending_devices"] = d["pending_devices"]
     if args.discovered:
-        folders.extend([{**d, "discovered": True} for d in pending_folders if d["id"] not in existing_folder_ids])
+        for d in pending_folders:
+            if d["id"] not in existing_folder_ids:
+                folders[d["id"]] = d
 
     if not folders:
         log.info("No folders configured or matched")
         return
 
-    pending_device_folders_count = defaultdict(int)
-    for d in folders:
-        if d.get("pending"):
-            pending_device_folders_count[d[id]] += 1
+    local_devices = []
+    if args.local_only:
+        local_devices.append(args.st.device_id)
+        local_devices.extend(args.st.devices(local_only=args.local_only))
+        local_devices.extend(args.st.pending_devices(local_only=args.local_only).keys())
+        local_devices.extend(args.st.discovered_devices(local_only=args.local_only).keys())
 
     filtered_folders = []
-    for folder in folders:
-        folder_id = folder.get("id")
+    for folder_id, folder in folders.items():
         label = folder.get("label")
         path = folder.get("path")
         paused = folder.get("paused") or False
-        status = "⏸️" if paused else ""
-        pending = folder.get("pending") or False
-        discovered = folder.get("discovered") or False
 
-        if discovered:
-            path = folder.get("devices")[0]
+        devices = folder.get("devices") or []
+        pending_devices = folder.get("pending_devices") or []
+        if args.local_only:
+            devices = [s for s in devices if s in local_devices]
+            pending_devices = [s for s in pending_devices if s in local_devices]
 
-        if args.print:
-            url = f"sync://{folder_id}#{args.st.device_id}"
-            if pending:
-                url = f"sync://{folder_id}#{folder.get('devices')[0]}"
-            str_utils.pipe_print(url)
-
-        fs = {}
-        if not pending:
-            fs |= args.st.folder_status(folder_id)
-
+        discovered_folder = not devices
+        folder_status = {} if discovered_folder else args.st.folder_status(folder_id)
         if args.missing:
-            error = fs.get("error")
+            error = folder_status.get("error")
             if error is None:
                 continue
             elif "folder path missing" not in error:
                 continue
-
-        # Basic state
-        state = fs.get("state")
-        if not state:
-            state = "pending" if pending else "unknown"
-
-        # Local vs Global
-        local_files = fs.get("localFiles")
-        global_files = fs.get("globalFiles")
-        local_bytes = fs.get("localBytes")
-        global_bytes = fs.get("globalBytes")
-
-        # Sync progress (remaining items)
-        need_files = fs.get("needFiles")
-        need_bytes = fs.get("needBytes")
-        sync_pct = 100
-        if global_bytes and global_bytes > 0:
-            sync_pct = (1 - (need_bytes / global_bytes)) * 100
-
-        # Errors and pulls
-        err_count = fs.get("errors")
-        pull_errors = fs.get("pullErrors")
-        err_msg = fs.get("error") or fs.get("invalid") or ""
-        err_fmt = []
-        if err_count:
-            err_fmt.append(f"errors:{err_count}")
-        if pull_errors:
-            err_fmt.append(f"pull:{pull_errors}")
-        if err_msg:
-            err_fmt.append(err_msg.strip())
-        err_fmt = ", ".join(err_fmt) or "-"
-
-        devices = folder.get("devices") or []
-        device_count_fmt = f"{len(devices)}"
-        if pending_device_folders_count.get(folder_id):
-            device_count_fmt += f" ({pending_device_folders_count[folder_id]})"
 
         free_space = None
         if path and os.path.exists(path):
@@ -153,77 +117,124 @@ def cmd_list_folders(args):
                 "folder_id": folder_id,
                 "label": label,
                 "path": path,
-                "local_files": local_files,
-                "local_bytes": local_bytes,
-                "need_files": need_files,
-                "need_bytes": need_bytes,
-                "global_files": global_files,
-                "global_bytes": global_bytes,
                 "free_space": free_space,
-                "status": status,
-                "sync_pct": sync_pct,
-                "state": state,
-                "device_count_fmt": device_count_fmt,
-                "err_fmt": err_fmt,
-                "pending": pending,
+                "paused": paused,
+                "folder_status": folder_status,
+                "devices": devices,
+                "pending_devices": pending_devices,
             }
         )
 
-    table_data = [
-        {
-            "Folder ID": d["folder_id"],
-            "Label": d["label"],
-            "Path": d["path"] or "-",
-            "Local": (
-                "%d files (%s)" % (d["local_files"], file_size(d["local_bytes"]))
-                if d["local_files"] is not None
-                else "-"
-            ),
-            "Needed": (
-                "%d files (%s)" % (d["need_files"], file_size(d["need_bytes"])) if d["need_files"] is not None else "-"
-            ),
-            "Global": (
-                "%d files (%s)" % (d["global_files"], file_size(d["global_bytes"]))
-                if d["global_files"] is not None
-                else "-"
-            ),
-            "Free": d["free_space"] or "-",
-            "Sync Status": "%s %.0f%% %s" % (d["status"], d["sync_pct"], d["state"]),
-            "Peers": d["device_count_fmt"],
-            "Errors": d["err_fmt"],
-        }
-        for d in filtered_folders
-        # for existing pending folders just show the number of devices
-        # that want to join the folder (pending_device_folders_count)
-        if not args.joined or (args.joined and not d["pending"])
-    ]
+    if args.print:
+        for d in filtered_folders:
+            folder_id = d["folder_id"]
 
-    if not args.print:
+            discovered_folder = not d["devices"]
+            pending_devices = d["pending_devices"]
+            if discovered_folder and pending_devices:
+                url = f"sync://{folder_id}#{pending_devices[0]}"
+            else:
+                url = f"sync://{folder_id}#{args.st.device_id}"
+            str_utils.pipe_print(url)
+    else:
+        table_data = []
+        for d in filtered_folders:
+            path = d["path"]
+            folder_status = d["folder_status"]
+            devices = d["devices"]
+            pending_devices = d["pending_devices"]
+            discovered_folder = not devices
+
+            # Basic state
+            state = folder_status.get("state")
+            if not state:
+                state = "pending" if discovered_folder else "unknown"
+
+            # Local vs Global
+            local_files = folder_status.get("localFiles")
+            global_files = folder_status.get("globalFiles")
+            local_bytes = folder_status.get("localBytes")
+            global_bytes = folder_status.get("globalBytes")
+
+            # Sync progress (remaining items)
+            need_files = folder_status.get("needFiles")
+            need_bytes = folder_status.get("needBytes")
+            sync_pct = 100
+            if global_bytes and global_bytes > 0:
+                sync_pct = (1 - (need_bytes / global_bytes)) * 100
+
+            # Errors and pulls
+            err_count = folder_status.get("errors")
+            pull_errors = folder_status.get("pullErrors")
+            err_msg = folder_status.get("error") or folder_status.get("invalid") or ""
+            err_fmt = []
+            if err_count:
+                err_fmt.append(f"errors:{err_count}")
+            if pull_errors:
+                err_fmt.append(f"pull:{pull_errors}")
+            if err_msg:
+                err_fmt.append(err_msg.strip())
+            err_fmt = ", ".join(err_fmt) or "-"
+
+            device_count_fmt = f"{len(devices)}"
+            if pending_devices:
+                device_count_fmt += f" ({len(pending_devices)})"
+
+            if discovered_folder and pending_devices:
+                path = pending_devices[0]
+
+            status = "⏸️" if d["paused"] else ""
+
+            table_data.append(
+                {
+                    "Folder ID": d["folder_id"],
+                    "Label": d["label"],
+                    "Path": path or "-",
+                    "Local": (
+                        "%d files (%s)" % (local_files, file_size(local_bytes))
+                        if local_files is not None
+                        else "-"
+                    ),
+                    "Needed": (
+                        "%d files (%s)" % (need_files, file_size(need_bytes))
+                        if need_files is not None
+                        else "-"
+                    ),
+                    "Global": (
+                        "%d files (%s)" % (global_files, file_size(global_bytes))
+                        if global_files is not None
+                        else "-"
+                    ),
+                    "Free": d["free_space"] or "-",
+                    "Sync Status": "%s %.0f%% %s" % (status, sync_pct, state),
+                    "Peers": device_count_fmt,
+                    "Errors": err_fmt,
+                }
+            )
         print(tabulate(table_data, headers="keys", tablefmt="simple"))
+        print()
 
     if args.delete_files:
-        print()
         for filtered_folder in filtered_folders:
-            if not filtered_folder["pending"]:
+            if filtered_folder["devices"] and os.path.exists(filtered_folder["path"]):
                 shutil.rmtree(filtered_folder["path"])
 
     if args.delete:
         for filtered_folder in filtered_folders:
-            if filtered_folder["pending"]:
-                args.st.delete_pending_folder(filtered_folder["folder_id"])
-            else:
+            for device_id in filtered_folder["pending_devices"]:
+                args.st.delete_pending_folder(filtered_folder["folder_id"], device_id)
+            if filtered_folder["devices"]:
                 args.st.delete_folder(filtered_folder["folder_id"])
 
     if args.join:
-        pending_folders = [d for d in filtered_folders if d.get('pending') or d.get('discovered')]
+        pending_folders = [d for d in filtered_folders if d["pending_devices"]]
         if not pending_folders:
             log.info(f"[%s] No pending folders", args.st.name)
             return
 
         for folder in pending_folders:
-            folder_id = folder["id"]
-            offered_by = folder.get("offeredBy", {}) or {}
-            device_ids = list(offered_by.keys())
+            folder_id = folder["folder_id"]
+            device_ids = folder["pending_devices"]
 
             if not device_ids:
                 log.error(f"[%s] No devices offering folder '%s'", args.st.name, folder_id)

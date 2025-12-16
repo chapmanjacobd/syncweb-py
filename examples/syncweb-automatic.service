@@ -5,7 +5,7 @@ Requires=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/syncweb-automatic
+ExecStart=%h/.local/bin/syncweb-automatic
 Restart=always
 RestartSec=5
 
