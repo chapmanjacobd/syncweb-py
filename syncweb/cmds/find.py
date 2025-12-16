@@ -157,7 +157,7 @@ def path2fid_allow_outside(args, abs_path):
             user_prefix = ""  # No prefix needed
             prefix = str(rel_path) if rel_path and str(rel_path) != "." else ""
             folder_id = folder["id"]
-            return folder_id, prefix, user_prefix
+            yield folder_id, prefix, user_prefix
         except ValueError:
             pass
 
@@ -167,11 +167,12 @@ def path2fid_allow_outside(args, abs_path):
             user_prefix = str(rel_path)  # relative path to Syncthing folder root
             prefix = ""  # Search API from root of Syncthing folder
             folder_id = folder["id"]
-            return folder_id, prefix, user_prefix
+            yield folder_id, prefix, user_prefix
+            break
         except ValueError:
             continue
 
-    return None, "", ""
+    yield None, "", ""
 
 
 def cmd_find(args) -> None:
@@ -213,20 +214,21 @@ If you want to search for all files inside the '%s' directory, use a match-all p
 
     for path in args.search_paths or ["."]:
         abs_path = Path(path).resolve()
-        folder_id, prefix, user_prefix = path2fid_allow_outside(args, abs_path)
-        if folder_id is None:
-            log.error("%s is not inside of a Syncweb folder", shlex.quote(str(abs_path)))
-            continue
+        for folder_id, prefix, user_prefix in path2fid_allow_outside(args, abs_path):
+            if folder_id is None:
+                continue
 
-        data = args.st.files(folder_id, levels=args.max_depth, prefix=prefix)
-        log.debug("files: %s top-level data", len(data))
+            data = args.st.files(folder_id, levels=args.max_depth, prefix=prefix)
+            log.debug("files: %s top-level data", len(data))
 
-        if user_prefix:
-            prefix = os.path.join(user_prefix, prefix) if prefix else user_prefix
+            if user_prefix:
+                prefix = os.path.join(user_prefix, prefix) if prefix else user_prefix
 
-        for p in find_files(args, data, prefix, (prefix.count("/") + 0) if prefix else 0):
-            if path != ".":
-                p = os.path.join(path, p)
-            if args.absolute_path:
-                p = os.path.realpath(p)
-            pipe_print(p)
+            for p in find_files(args, data, prefix, (prefix.count("/") + 0) if prefix else 0):
+                if path != ".":
+                    p = os.path.join(path, p)
+                if args.absolute_path:
+                    p = os.path.realpath(p)
+                pipe_print(p)
+        else:
+            log.error("%s is not inside nor a parent of a Syncweb folder", shlex.quote(str(abs_path)))
