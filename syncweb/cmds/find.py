@@ -158,6 +158,7 @@ def path2fid_allow_outside(args, abs_path):
             prefix = str(rel_path) if rel_path and str(rel_path) != "." else ""
             folder_id = folder["id"]
             yield folder_id, prefix, user_prefix
+            break
         except ValueError:
             pass
 
@@ -168,11 +169,8 @@ def path2fid_allow_outside(args, abs_path):
             prefix = ""  # Search API from root of Syncthing folder
             folder_id = folder["id"]
             yield folder_id, prefix, user_prefix
-            break
         except ValueError:
             continue
-
-    yield None, "", ""
 
 
 def cmd_find(args) -> None:
