@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os, shutil
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime
 
 from tabulate import tabulate
@@ -55,7 +55,7 @@ def cmd_list_folders(args):
     existing_folders = args.st.folders()
     existing_folder_ids = {d["id"]: d for d in existing_folders}
     for d in existing_folders:
-        d['devices'] = [dd["deviceID"] for dd in d['devices']]
+        d["devices"] = [dd["deviceID"] for dd in d["devices"]]
 
     pending_folders = []
     if args.pending or args.discovered:
@@ -68,7 +68,10 @@ def cmd_list_folders(args):
     if args.pending:
         for d in pending_folders:
             if d["id"] in existing_folder_ids:
-                folders[d["id"]]["pending_devices"] = d["pending_devices"]
+                if args.joined:
+                    folders[d["id"]]["pending_devices"] = d["pending_devices"]
+                else:
+                    folders[d["id"]] = d
     if args.discovered:
         for d in pending_folders:
             if d["id"] not in existing_folder_ids:
@@ -124,6 +127,10 @@ def cmd_list_folders(args):
                 "pending_devices": pending_devices,
             }
         )
+
+    if not filtered_folders:
+        log.info("No folders missing")
+        return
 
     if args.print:
         for d in filtered_folders:
@@ -191,19 +198,13 @@ def cmd_list_folders(args):
                     "Label": d["label"],
                     "Path": path or "-",
                     "Local": (
-                        "%d files (%s)" % (local_files, file_size(local_bytes))
-                        if local_files is not None
-                        else "-"
+                        "%d files (%s)" % (local_files, file_size(local_bytes)) if local_files is not None else "-"
                     ),
                     "Needed": (
-                        "%d files (%s)" % (need_files, file_size(need_bytes))
-                        if need_files is not None
-                        else "-"
+                        "%d files (%s)" % (need_files, file_size(need_bytes)) if need_files is not None else "-"
                     ),
                     "Global": (
-                        "%d files (%s)" % (global_files, file_size(global_bytes))
-                        if global_files is not None
-                        else "-"
+                        "%d files (%s)" % (global_files, file_size(global_bytes)) if global_files is not None else "-"
                     ),
                     "Free": d["free_space"] or "-",
                     "Sync Status": "%s %.0f%% %s" % (status, sync_pct, state),

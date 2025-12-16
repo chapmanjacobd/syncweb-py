@@ -1,13 +1,30 @@
 [Unit]
-Description=SyncWeb-automatic daemon
+Description=Syncweb-automatic daemon
 After=network-online.target
-Requires=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/syncweb-automatic
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=/usr/bin/env syncweb automatic
+
+# Ensure Python flushes logs immediately
+Environment=PYTHONUNBUFFERED=1
+
+# Restart behavior
 Restart=always
-RestartSec=5
+RestartSec=3
+
+# Give the daemon time to finish an iteration
+TimeoutStopSec=60
+KillSignal=SIGTERM
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+RestrictRealtime=yes
+LockPersonality=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

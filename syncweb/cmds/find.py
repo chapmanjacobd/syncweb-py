@@ -33,7 +33,6 @@ def split_pattern(pattern: str) -> List[str]:
     return shlex.split(pattern) if pattern else []
 
 
-
 def regex_match(name: str, patterns: List[str], ignore_case: bool) -> bool:
     flags = re.IGNORECASE if ignore_case else 0
 

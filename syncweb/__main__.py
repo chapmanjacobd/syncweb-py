@@ -4,6 +4,7 @@ from pathlib import Path
 
 from syncweb import cmd_utils
 from syncweb.cli import STDIN_DASH, ArgparseArgsOrStdin, ArgparseList, SubParser
+from syncweb.cmds.automatic import cmd_automatic
 from syncweb.cmds.devices import cmd_list_devices
 from syncweb.cmds.download import cmd_download
 from syncweb.cmds.find import cmd_find
@@ -443,12 +444,14 @@ but when this is specified children affect all ancestors
         help="File or directory paths to download (or read from stdin)",
     )
 
+    automatic = subparsers.add_parser("automatic", help="Start syncweb-automatic daemon", func=cmd_automatic)
+
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("start", help="Start Syncweb", aliases=["restart"], func=cmd_start)
 
     subparsers.add_parser("repl", help="Talk to Syncthing API", func=lambda a: (self := a.st) and breakpoint())
     subparsers.add_parser("version", help="Show Syncweb version", func=cmd_version)
-    subparsers.add_parser("help", help="Show this help message", func=lambda a: subparsers.print_help())
+    subparsers.add_parser("help", help="Show this help message", func=lambda _: subparsers.print_help())
 
     args = subparsers.parse()
 
