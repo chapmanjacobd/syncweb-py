@@ -168,6 +168,10 @@ def build_download_plan(args, paths):
         if folder_id is None:
             log.warning("%s is not inside of a Syncthing folder", shlex.quote(str(abs_path)))
             continue
+        if args.st.folder(folder_id)["type"] == 'sendonly':
+            log.info("%s is a sendonly folder", shlex.quote(folder_id))
+            continue
+
         if not prefix:
             log.warning("%s: is not a relative path. Including all files in %s...", path, folder_id)
             prefix = "/"
@@ -384,13 +388,14 @@ def cmd_download(args):
     for folder_id, files in plan.items():
         rel_paths = [file_path for file_path, _ in files]
 
-        try:
-            log.info("Queueing %d files in folder %s...", len(rel_paths), folder_id)
-            args.st.add_ignores(folder_id, rel_paths)
-            download_count += len(rel_paths)
+        if rel_paths:
+            try:
+                log.info("Queueing %d files in folder %s...", len(rel_paths), folder_id)
+                args.st.add_ignores(folder_id, rel_paths)
+                download_count += len(rel_paths)
 
-        except Exception as e:
-            log.error("Failed to unignore files in folder %s: %s", folder_id, str(e))
-            continue
+            except Exception as e:
+                log.error("Failed to unignore files in folder %s: %s", folder_id, str(e))
+                continue
 
     log.info("Total: Queued %d files across %d folders", download_count, len(plan))
