@@ -10,14 +10,11 @@ def handle_signal(signum, frame):
     shutdown.set()
 
 
-def run(cmd, *, stdin=None):
+def run(cmd, *, stdin=None, capture_output=False):
     if shutdown.is_set():
         return
 
-    try:
-        subprocess.run(cmd, input=stdin, text=True, check=False)
-    except Exception as e:
-        print(f"[syncweb-daemon] error running {cmd}: {e}", file=sys.stderr)
+    return subprocess.run(cmd, input=stdin, capture_output=capture_output, text=True, check=False)
 
 
 def get_download_paths():
@@ -25,12 +22,8 @@ def get_download_paths():
     Equivalent to: grep -Fv -f <(syncweb-blocklist.sh) <(syncweb-wishlist.sh)
     """
     try:
-        blocklist = subprocess.run(
-            ["syncweb-blocklist.sh"], text=True, capture_output=True, check=False
-        ).stdout.splitlines()
-        wishlist = subprocess.run(
-            ["syncweb-wishlist.sh"], text=True, capture_output=True, check=False
-        ).stdout.splitlines()
+        blocklist = run(["syncweb-blocklist.sh"], capture_output=True).stdout.splitlines()
+        wishlist = run(["syncweb-wishlist.sh"], capture_output=True).stdout.splitlines()
 
         block_set = set(blocklist)
         return [line for line in wishlist if line and line not in block_set]
@@ -45,20 +38,32 @@ def syncweb_automatic():
     SLEEP_JOIN = 10
 
     while not shutdown.is_set():
-        # Accept new local peers
-        run(["syncweb", "devices", "--local-only", "--pending", "--accept"])
+        # Accept new peer invitations from local devices
+        # run(["syncweb", "devices", "--local-only", "--pending", "--accept"])
+
+        # and optionally send out invitations to discovered peers
+        run(["syncweb", "devices", "--local-only", "--pending", "--discovered", "--accept"])
         if shutdown.wait(SLEEP_ACCEPT):
             break
 
         # Join pending folders from local devices
-        run(["syncweb", "folders", "--local-only", "--pending", "--join"])
+        # run(["syncweb", "folders", "--local-only", "--pending", "--join"])
+
+        # and optionally announce new folders to connected devices
+        # run(["syncweb", "folders", "--local-only", "--pending", "--join", "--introduce"])
+
+        # and optionally join new folder ids
+        run(["syncweb", "folders", "--local-only", "--pending", "--discovered", "--join", "--introduce"])
         if shutdown.wait(SLEEP_JOIN):
             break
 
         # Mark new downloads via wishlists
         paths = get_download_paths()
-        if paths and not shutdown.is_set():
-            run(["syncweb", "download", "--yes"], stdin="\n".join(paths) + "\n")
+        if paths:
+            stdin = "\n".join(paths) + "\n"
+            sorted_paths = run(["syncweb", "sort"], stdin=stdin, capture_output=True)
+
+            run(["syncweb", "download", "--yes"], stdin=sorted_paths.stdout)
 
 
 def cmd_automatic(args):
