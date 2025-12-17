@@ -149,7 +149,7 @@ def find_files(args, items, current_path: str | None = "", current_depth: int = 
 def path2fid_allow_outside(args, abs_path):
     # user_prefix: Path prefix to show to user (any path parts above Syncthing folder)
     for folder in args.st.folders() or []:
-        if args.downloadable and folder["type"] == 'sendonly':
+        if args.downloadable and folder["type"] == "sendonly":
             continue
 
         folder_path = Path(folder["path"]).resolve()

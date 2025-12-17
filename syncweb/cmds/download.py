@@ -168,7 +168,7 @@ def build_download_plan(args, paths):
         if folder_id is None:
             log.warning("%s is not inside of a Syncthing folder", shlex.quote(str(abs_path)))
             continue
-        if args.st.folder(folder_id)["type"] == 'sendonly':
+        if args.st.folder(folder_id)["type"] == "sendonly":
             log.info("%s is a sendonly folder", shlex.quote(folder_id))
             continue
 

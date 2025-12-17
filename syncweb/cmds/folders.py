@@ -3,6 +3,7 @@
 import os, shutil
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 from tabulate import tabulate
 
@@ -252,11 +253,15 @@ def cmd_list_folders(args):
                     args.st.resume(device_id)
             else:  # folder doesn't exist; create it (with devices)
                 log.info(f"[%s] Creating folder '%s'", args.st.name, folder_id)
-                cfg = {
-                    "id": folder_id,
-                    "label": folder_id,
-                    "path": str(args.st.home / folder_id),
-                    "type": "receiveonly",
-                    "devices": [{"deviceID": d} for d in device_ids],
-                }
-                args.st._post("config/folders", json=cfg)
+                dest = Path("~/Syncweb").expanduser() / folder_id
+
+                args.st.add_folder(
+                    id=folder_id,
+                    label=folder_id,
+                    path=str(dest),
+                    type="receiveonly",
+                    devices=[{"deviceID": d} for d in device_ids],
+                    paused=True,
+                )
+                args.st.set_ignores(folder_id)
+                args.st.resume_folder(folder_id)
