@@ -81,12 +81,12 @@ def cmd_list_folders(args):
         log.info("No folders configured or matched")
         return
 
-    local_devices = []
-    if args.local_only:
-        local_devices.append(args.st.device_id)
-        local_devices.extend(args.st.devices(local_only=args.local_only))
-        local_devices.extend(args.st.pending_devices(local_only=args.local_only).keys())
-        local_devices.extend(args.st.discovered_devices(local_only=args.local_only).keys())
+    known_devices = []
+    if args.local_only or args.introduce:
+        known_devices.append(args.st.device_id)
+        known_devices.extend([d["deviceID"] for d in args.st.devices(local_only=args.local_only)])
+        known_devices.extend(args.st.pending_devices(local_only=args.local_only).keys())
+        known_devices.extend(args.st.discovered_devices(local_only=args.local_only).keys())
 
     filtered_folders = []
     for folder_id, folder in folders.items():
@@ -97,8 +97,10 @@ def cmd_list_folders(args):
         devices = folder.get("devices") or []
         pending_devices = folder.get("pending_devices") or []
         if args.local_only:
-            devices = [s for s in devices if s in local_devices]
-            pending_devices = [s for s in pending_devices if s in local_devices]
+            devices = [s for s in devices if s in known_devices]
+            pending_devices = [s for s in pending_devices if s in known_devices]
+        if args.introduce:
+            pending_devices = list(set(pending_devices) | set([s for s in known_devices if s not in devices]))
 
         discovered_folder = not devices
         folder_status = {} if discovered_folder else args.st.folder_status(folder_id)
