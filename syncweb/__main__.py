@@ -379,11 +379,12 @@ def cli():
         "-u",
         default=[],
         action=ArgparseList,
-        help="""Sort by popular, balanced, recent, size, frecency, or random.
+        help="""Sort by seeds, time, date, week, month, year, size, niche, frecency, folder-size, folder-date, file-count, or random.
 
-Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
+Use '-' to sort by descending order (decreasing values from high to low),
+for example `--sort=date,-seeds` means old and popular
 
-(default: "balanced,frecency")""",
+(default: "-niche,-frecency")""",
     )
     sort.add_argument(
         "--min-seeders", "--min-copies", type=int, default=0, metavar="N", help="Filter files with fewer than N seeders"
@@ -422,8 +423,8 @@ Use '-' to negate, for example `--sort=-recent,-popular` means old and unpopular
 -d=-2        # Aggregate folders up to depth 2 (max_depth=2)
 -d=+1 -d=-3  # Aggregate folders from depth 1 to 3
 
-By default only the immediate parent folder is used for folder aggregation
-but when this is specified children affect all ancestors
+(By default only the immediate parent folder is used for folder aggregation
+--when this is specified children affect all ancestors)
 """,
     )
     sort.add_argument("--min-depth", type=int, default=0, metavar="N", help="Alternative depth notation")
@@ -447,6 +448,20 @@ but when this is specified children affect all ancestors
     )
 
     automatic = subparsers.add_parser("automatic", help="Start syncweb-automatic daemon", func=cmd_automatic)
+    automatic.add_argument(
+        "--global",
+        dest="non_local",
+        action="store_true",
+        help="Auto-accept devices / auto-join folders from around the world (default: only local devices)",
+    )
+    automatic.add_argument("--devices", action="store_true", help="Send device peering request to other devices")
+    automatic.add_argument("--folders", action="store_true", help="Send folder peering request to other devices")
+    automatic.add_argument("--join-new-folders", action="store_true", help="Join non-existing folders from other devices")
+    automatic.add_argument(
+        "--sort",
+        default="-niche,-frecency",
+        help="Sort criteria for download prioritization",
+    )
 
     subparsers.add_parser("shutdown", help="Shut down Syncweb", aliases=["stop", "quit"], func=cmd_shutdown)
     subparsers.add_parser("start", help="Start Syncweb", aliases=["restart"], func=cmd_start)

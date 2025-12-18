@@ -117,7 +117,7 @@ def make_sort_key(args, folder_aggregates):
 
             value = None
             match mode:
-                case "peers" | "seeds":
+                case "peers" | "seeds" | "copies":
                     value = file_data["num_peers"]
                 case "time":
                     value = file_data["modified"]
@@ -132,9 +132,9 @@ def make_sort_key(args, folder_aggregates):
                 case "size":
                     value = file_data["size"]
                 case "niche":
-                    value = -abs(file_data["num_peers"] - args.niche)
+                    value = abs(file_data["num_peers"] - args.niche)
                 case "frecency":  # popular + recent
-                    value = -(file_data["num_peers"] - (days_since(file_data["modified"]) / args.frecency_weight))
+                    value = (file_data["num_peers"] - (days_since(file_data["modified"]) / args.frecency_weight))
                 case "random":
                     value = rand_map.setdefault(id(file_data), random.random())
                 case "folder-size" | "foldersize":
@@ -163,7 +163,7 @@ def make_sort_key(args, folder_aggregates):
 
 def cmd_sort(args) -> None:
     if not args.sort:
-        args.sort = ["niche", "frecency"]
+        args.sort = ["-niche", "-frecency"]
     args.sort = [s.lower() for s in args.sort]
 
     args.limit_size = human_to_bytes(args.limit_size) if args.limit_size else None
