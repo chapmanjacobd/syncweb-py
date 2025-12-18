@@ -15,7 +15,7 @@ from syncweb.cmds.stat import cmd_stat
 from syncweb.log_utils import log
 from syncweb.syncweb import Syncweb
 
-__version__ = "0.0.15"
+__version__ = "0.0.16"
 
 
 def cmd_version(args):
@@ -456,7 +456,9 @@ for example `--sort=date,-seeds` means old and popular
     )
     automatic.add_argument("--devices", action="store_true", help="Send device peering request to other devices")
     automatic.add_argument("--folders", action="store_true", help="Send folder peering request to other devices")
-    automatic.add_argument("--join-new-folders", action="store_true", help="Join non-existing folders from other devices")
+    automatic.add_argument(
+        "--join-new-folders", action="store_true", help="Join non-existing folders from other devices"
+    )
     automatic.add_argument(
         "--sort",
         default="-niche,-frecency",

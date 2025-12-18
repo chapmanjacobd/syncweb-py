@@ -134,7 +134,7 @@ def make_sort_key(args, folder_aggregates):
                 case "niche":
                     value = abs(file_data["num_peers"] - args.niche)
                 case "frecency":  # popular + recent
-                    value = (file_data["num_peers"] - (days_since(file_data["modified"]) / args.frecency_weight))
+                    value = file_data["num_peers"] - (days_since(file_data["modified"]) / args.frecency_weight)
                 case "random":
                     value = rand_map.setdefault(id(file_data), random.random())
                 case "folder-size" | "foldersize":

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-import argparse
-import signal, subprocess, sys
+import argparse, signal, subprocess, sys
 from threading import Event
 
 shutdown = Event()
