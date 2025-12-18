@@ -76,7 +76,7 @@ class SyncthingNodeXML:
         # gui["@enabled"] = "true"
         # gui["@tls"] = "false"
         # gui["@sendBasicAuthPrompt"] = "false"
-        # gui["address"] = "0.0.0.0:8384"
+        # gui["address"] = "0.0.0.0:8385"
         # gui["metricsWithoutAuth"] = "false"
         # gui["apikey"] = "yQzanLVcNw2Rr2bQRH75Ncds3XStomR7"
         # gui["theme"] = "default"
@@ -268,7 +268,7 @@ class SyncthingNodeXML:
             log.warning("[START]: %s process already running", self.name)
             return
 
-        gui_port = self.find_free_port(8384)
+        gui_port = self.find_free_port(8385)
         self.config["gui"]["address"] = f"127.0.0.1:{gui_port}"
         # self.sync_port = find_free_port(22000)
         # self.config["options"]["listenAddress"] = f"tcp://0.0.0.0:{self.sync_port}"
