@@ -89,10 +89,17 @@ def cmd_list_devices(args):
 
         is_localhost = device_id == args.st.device_id
 
-        name = device.get("name", "<no name>")
+        device_name = device.get("name", "<no name>")
         paused = device.get("paused") or False
         pending = device.get("pending") or False
         discovered = device.get("discovered") or False
+
+        if args.include:
+            if not all(s in device_name or s in device_id for s in args.include):
+                continue
+        if args.exclude:
+            if any(s in device_name or s in device_id for s in args.exclude):
+                continue
 
         device_stat = device_stats.get(device_id)
         if device_stat:
@@ -132,7 +139,7 @@ def cmd_list_devices(args):
 
         row = [
             device_id,
-            name,
+            device_name,
             status + " " + str_utils.relative_datetime(last_seen),
             str_utils.duration_short(last_duration),
             bandwidth_str,
@@ -170,3 +177,13 @@ def cmd_list_devices(args):
 
     if args.accept:
         args.st.accept_devices(device_ids)
+
+    if args.pause:
+        for device_id in device_ids:
+            args.st.pause(device_id)
+        print("Paused", len(device_ids), "devices")
+
+    if args.resume:
+        for device_id in device_ids:
+            args.st.resume(device_id)
+        print("Resumed", len(device_ids), "devices")

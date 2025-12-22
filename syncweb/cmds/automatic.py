@@ -42,8 +42,14 @@ def syncweb_automatic(args):
         devices_cmd = ["syncweb", "devices", "--pending", "--accept"]
         if not args.non_local:
             devices_cmd.append("--local-only")
+        if args.folders_include:
+            devices_cmd.extend(["--include", ",".join(args.folders_include)])
+        if args.folders_exclude:
+            devices_cmd.extend(["--exclude", ",".join(args.folders_exclude)])
+        # Actions
         if args.devices:
             devices_cmd.append("--discovered")
+
         run(devices_cmd)
         if shutdown.wait(SLEEP_ACCEPT):
             break
@@ -52,10 +58,16 @@ def syncweb_automatic(args):
         folders_cmd = ["syncweb", "folders", "--pending", "--join"]
         if not args.non_local:
             folders_cmd.append("--local-only")
+        if args.devices_include:
+            devices_cmd.extend(["--include", ",".join(args.devices_include)])
+        if args.devices_exclude:
+            devices_cmd.extend(["--exclude", ",".join(args.devices_exclude)])
+        # Actions
         if args.join_new_folders:
             folders_cmd.append("--discovered")
         if args.folders:
             folders_cmd.append("--introduce")
+
         run(folders_cmd)
         if shutdown.wait(SLEEP_JOIN):
             break

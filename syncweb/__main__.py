@@ -32,42 +32,6 @@ def cmd_shutdown(args):
     args.st.shutdown()
 
 
-def cmd_pause(args):
-    if args.all:
-        added = args.st.cmd_pause()
-        log.info("Paused all devices")
-    else:
-        added = args.st.cmd_pause(args.device_ids)
-        log.info("Paused", added, "device" if added == 1 else "devices")
-
-
-def cmd_resume(args):
-    if args.all:
-        added = args.st.cmd_resume()
-        log.info("Resumed all devices")
-    else:
-        added = args.st.cmd_resume(args.device_ids)
-        log.info("Resumed", added, "device" if added == 1 else "devices")
-
-
-def cmd_pause_folder(args):
-    if args.all:
-        added = args.st.cmd_pause_folder()
-        log.info("Paused all folders")
-    else:
-        added = args.st.cmd_pause_folder(args.folder_ids)
-        log.info("Paused", added, "folder" if added == 1 else "folders")
-
-
-def cmd_resume_folder(args):
-    if args.all:
-        added = args.st.cmd_resume_folder()
-        log.info("Resumed all folders")
-    else:
-        added = args.st.cmd_resume_folder(args.folder_ids)
-        log.info("Resumed", added, "folder" if added == 1 else "folders")
-
-
 def cmd_accept(args):
     added = args.st.cmd_accept(args.device_ids, args.folder_ids)
     log.info("Added %s %s", added, "device" if added == 1 else "devices")
@@ -192,9 +156,26 @@ def cli():
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending and/or discovered folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
     folders.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
+    folders.add_argument(
+        "--include",
+        "--search",
+        "-s",
+        default=[],
+        action=ArgparseList,
+        help="Search for folders which match by label, folder ID, or folder path",
+    )
+    folders.add_argument(
+        "--exclude",
+        "-E",
+        default=[],
+        action=ArgparseList,
+        help="Exclude folders which match by label, folder ID, or folder path",
+    )
     folders.add_argument("--introduce", action="store_true", help="Introduce devices to all local folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
     folders.add_argument("--delete-files", action="store_true", help="Delete actual folders/files in filtered folders")
+    folders.add_argument("--pause", action="store_true", help="Pause matching folders")
+    folders.add_argument("--resume", action="store_true", help="Resume (unpause) matching folders")
     folders.add_argument("--print", action="store_true", help="Only print folder ids")
 
     devices = subparsers.add_parser(
@@ -222,41 +203,24 @@ def cli():
     devices.add_argument("--accepted", "--joined", action="store_true", help="Only show accepted devices")
     devices.add_argument("--accept", action="store_true", help="Accept filtered devices")
     devices.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
-    devices.add_argument("--print", action="store_true", help="Only print device ids")
-
-    pause = subparsers.add_parser("pause", help="Pause data transfer to a device in your syncweb", func=cmd_pause)
-    pause.add_argument("--all", "-a", action="store_true", help="All devices")
-    pause.add_argument(
-        "device_ids",
-        nargs="+",
+    devices.add_argument(
+        "--include",
+        "--search",
+        "-s",
+        default=[],
         action=ArgparseList,
-        help="One or more Syncthing device IDs (space or comma-separated)",
+        help="Search for devices which match by device name or device ID",
     )
-    resume = subparsers.add_parser("resume", help="Resume data transfer to a device in your syncweb", func=cmd_resume)
-    resume.add_argument("--all", "-a", action="store_true", help="All devices")
-    resume.add_argument(
-        "device_ids",
-        nargs="+",
+    devices.add_argument(
+        "--exclude",
+        "-E",
+        default=[],
         action=ArgparseList,
-        help="One or more Syncthing device IDs (space or comma-separated)",
+        help="Exclude devices which match by device name or device ID",
     )
-
-    pause_folder = subparsers.add_parser("pause-folder", help="Pause a folder in your syncweb", func=cmd_pause)
-    pause_folder.add_argument("--all", "-a", action="store_true", help="All folders")
-    pause_folder.add_argument(
-        "folder_ids",
-        nargs="+",
-        action=ArgparseList,
-        help="One or more Syncthing folder IDs (space or comma-separated)",
-    )
-    resume_folder = subparsers.add_parser("resume-folder", help="Resume a folder in your syncweb", func=cmd_resume)
-    resume_folder.add_argument("--all", "-a", action="store_true", help="All folders")
-    resume_folder.add_argument(
-        "folder_ids",
-        nargs="+",
-        action=ArgparseList,
-        help="One or more Syncthing folder IDs (space or comma-separated)",
-    )
+    devices.add_argument("--pause", action="store_true", help="Pause matching devices")
+    devices.add_argument("--resume", action="store_true", help="Resume (unpause) matching devices")
+    devices.add_argument("--print", action="store_true", help="Print only device ids")
 
     ls = subparsers.add_parser("ls", aliases=["list"], help="List files at the current directory level", func=cmd_ls)
     ls.add_argument("--long", "-l", action="store_true", help="use long listing format")
@@ -453,6 +417,36 @@ for example `--sort=date,-seeds` means old and popular
         dest="non_local",
         action="store_true",
         help="Auto-accept devices / auto-join folders from around the world (default: only local devices)",
+    )
+    automatic.add_argument(
+        "--folders-include",
+        "--include",
+        "--search",
+        "-s",
+        default=[],
+        action=ArgparseList,
+        help="Search for folders which match by label, folder ID, or folder path",
+    )
+    automatic.add_argument(
+        "--folders-exclude",
+        "--exclude",
+        "-E",
+        default=[],
+        action=ArgparseList,
+        help="Exclude folders which match by label, folder ID, or folder path",
+    )
+    automatic.add_argument(
+        "--devices-include",
+        "--devices-search",
+        default=[],
+        action=ArgparseList,
+        help="Search for devices which match by device name or device ID",
+    )
+    automatic.add_argument(
+        "--devices-exclude",
+        default=[],
+        action=ArgparseList,
+        help="Exclude devices which match by device name or device ID",
     )
     automatic.add_argument("--devices", action="store_true", help="Send device peering request to other devices")
     automatic.add_argument("--folders", action="store_true", help="Send folder peering request to other devices")

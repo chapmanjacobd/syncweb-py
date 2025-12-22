@@ -63,68 +63,6 @@ class Syncweb(SyncthingNode):
 
         return device_count
 
-    def cmd_pause(self, device_ids=None):
-        if device_ids is None:
-            return self.pause()
-
-        device_count = 0
-        for path in device_ids:
-            try:
-                device_id = str_utils.extract_device_id(path)
-                self.pause(device_id)
-                device_count += 1
-            except ValueError:
-                log.error("Invalid Device ID %s", path)
-
-        return device_count
-
-    def cmd_resume(self, device_ids=None):
-        if device_ids is None:
-            return self.resume()
-
-        device_count = 0
-        for path in device_ids:
-            try:
-                device_id = str_utils.extract_device_id(path)
-                self.resume(device_id)
-                device_count += 1
-            except ValueError:
-                log.error("Invalid Device ID %s", path)
-
-        return device_count
-
-    def cmd_pause_folder(self, folder_ids=None):
-        if folder_ids is None:
-            for folder_id, _data in self.folders_dict.items():
-                self.pause_folder(folder_id)
-            return
-
-        folder_count = 0
-        for folder_id in folder_ids:
-            try:
-                self.pause_folder(folder_id)
-                folder_count += 1
-            except ValueError:
-                log.error("Invalid folder ID %s", folder_id)
-
-        return folder_count
-
-    def cmd_resume_folder(self, folder_ids=None):
-        if folder_ids is None:
-            for folder_id, _data in self.folders_dict.items():
-                self.resume_folder(folder_id)
-            return
-
-        folder_count = 0
-        for folder_id in folder_ids:
-            try:
-                self.resume_folder(folder_id)
-                folder_count += 1
-            except ValueError:
-                log.error("Invalid folder ID %s", folder_id)
-
-        return folder_count
-
     def create_folder_id(self, path):
         existing_folders = set(self.folder_stats().keys())
 

@@ -112,6 +112,13 @@ def cmd_list_folders(args):
             elif "folder path missing" not in error:
                 continue
 
+        if args.include:
+            if not all(s in label or s in folder_id or s in path for s in args.include):
+                continue
+        if args.exclude:
+            if any(s in label or s in folder_id or s in path for s in args.exclude):
+                continue
+
         free_space = None
         if path and os.path.exists(path):
             disk_info = shutil.disk_usage(path)
@@ -218,17 +225,22 @@ def cmd_list_folders(args):
         print(tabulate(table_data, headers="keys", tablefmt="simple"))
         print()
 
+    if args.pause:
+        for d in filtered_folders:
+            args.st.pause_folder(d["folder_id"])
+        print("Paused", len(filtered_folders), "folders")
+
     if args.delete_files:
-        for filtered_folder in filtered_folders:
-            if filtered_folder["devices"] and os.path.exists(filtered_folder["path"]):
-                shutil.rmtree(filtered_folder["path"])
+        for d in filtered_folders:
+            if d["devices"] and os.path.exists(d["path"]):
+                shutil.rmtree(d["path"])
 
     if args.delete:
-        for filtered_folder in filtered_folders:
-            for device_id in filtered_folder["pending_devices"]:
-                args.st.delete_pending_folder(filtered_folder["folder_id"], device_id)
-            if filtered_folder["devices"]:
-                args.st.delete_folder(filtered_folder["folder_id"])
+        for d in filtered_folders:
+            for device_id in d["pending_devices"]:
+                args.st.delete_pending_folder(d["folder_id"], device_id)
+            if d["devices"]:
+                args.st.delete_folder(d["folder_id"])
 
     if args.join:
         pending_folders = [d for d in filtered_folders if d["pending_devices"]]
@@ -265,3 +277,8 @@ def cmd_list_folders(args):
                 )
                 args.st.set_ignores(folder_id)
                 args.st.resume_folder(folder_id)
+
+    if args.resume:
+        for d in filtered_folders:
+            args.st.resume_folder(d["folder_id"])
+        print("Resumed", len(filtered_folders), "folders")
