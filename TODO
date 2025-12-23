@@ -2,8 +2,6 @@ syncweb name (default to hostname instead of syncweb?)
 
 devices: --introducer option
 
-folders, automatic: filter folder types
-
 sort by Wikipedia Importance
 
 --print template in find? bridge the gap between find and stat --terse

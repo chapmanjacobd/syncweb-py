@@ -94,6 +94,7 @@ def cmd_list_folders(args):
         label = folder.get("label")
         path = folder.get("path")
         paused = folder.get("paused") or False
+        folder_type = folder.get("type")
 
         devices = folder.get("devices") or []
         pending_devices = folder.get("pending_devices") or []
@@ -119,6 +120,9 @@ def cmd_list_folders(args):
             if any(s in label or s in folder_id or s in path for s in args.exclude):
                 continue
 
+        if args.folder_types and folder_type not in args.folder_types:
+            continue
+
         free_space = None
         if path and os.path.exists(path):
             disk_info = shutil.disk_usage(path)
@@ -130,6 +134,7 @@ def cmd_list_folders(args):
                 "folder_id": folder_id,
                 "label": label,
                 "path": path,
+                "type": folder_type,
                 "free_space": free_space,
                 "paused": paused,
                 "folder_status": folder_status,
@@ -139,7 +144,7 @@ def cmd_list_folders(args):
         )
 
     if not filtered_folders:
-        log.info("No folders missing")
+        log.info("No folders matched query")
         return
 
     if args.print:

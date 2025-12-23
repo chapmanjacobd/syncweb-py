@@ -62,6 +62,8 @@ def syncweb_automatic(args):
             devices_cmd.extend(["--include", ",".join(args.devices_include)])
         if args.devices_exclude:
             devices_cmd.extend(["--exclude", ",".join(args.devices_exclude)])
+        if args.folder_types:
+            devices_cmd.extend(["--folder-types", ",".join(args.folder_types)])
         # Actions
         if args.join_new_folders:
             folders_cmd.append("--discovered")

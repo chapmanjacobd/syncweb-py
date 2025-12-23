@@ -155,7 +155,7 @@ def cli():
     folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending and/or discovered folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
-    folders.add_argument("--local-only", "--local", action="store_true", help="Only include local devices")
+    folders.add_argument("--local-only", "--local", action="store_true", help="Only include local devices when joining folders and counting peers")
     folders.add_argument(
         "--include",
         "--search",
@@ -170,6 +170,14 @@ def cli():
         default=[],
         action=ArgparseList,
         help="Exclude folders which match by label, folder ID, or folder path",
+    )
+    folders.add_argument(
+        "--folder-types",
+        "--type",
+        "-t",
+        default=[],
+        action=ArgparseList,
+        help="Filter folders by folder type: sendreceive, sendonly, receiveonly, and/or receiveencrypted",
     )
     folders.add_argument("--introduce", action="store_true", help="Introduce devices to all local folders")
     folders.add_argument("--delete", action="store_true", help="Delete Syncweb metadata for filtered folders")
@@ -434,6 +442,14 @@ for example `--sort=date,-seeds` means old and popular
         default=[],
         action=ArgparseList,
         help="Exclude folders which match by label, folder ID, or folder path",
+    )
+    automatic.add_argument(
+        "--folder-types",
+        "--type",
+        "-t",
+        default=[],
+        action=ArgparseList,
+        help="Filter folders by folder type: sendreceive, sendonly, receiveonly, and/or receiveencrypted",
     )
     automatic.add_argument(
         "--devices-include",
