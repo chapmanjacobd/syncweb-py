@@ -1,5 +1,7 @@
+import argparse, os, platform, socket, subprocess, sys
+
 #!/usr/bin/env python3
-import argparse, os, sys
+from contextlib import suppress
 from pathlib import Path
 
 from syncweb import cmd_utils
@@ -52,6 +54,25 @@ def cmd_join(args):
     log.info("Added %s %s", added_devices, "device" if added_devices == 1 else "devices")
     log.info("Added %s %s", added_folders, "folder" if added_folders == 1 else "folders")
     print("Local Device ID:", args.st.device_id)
+
+
+def get_hostname():
+    with suppress(Exception):
+        name = socket.gethostname()
+        if name and name != "localhost":
+            return name
+
+    with suppress(Exception):
+        name = platform.node()
+        if name and name != "localhost":
+            return name
+
+    with suppress(Exception):
+        name = subprocess.check_output(["hostname"], text=True).strip()
+        if name and name != "localhost":
+            return name
+
+    return "syncweb"
 
 
 def cli():
@@ -155,7 +176,12 @@ def cli():
     folders.add_argument("--joined", "--accepted", action="store_true", help="Only show accepted folders")
     folders.add_argument("--join", "--accept", action="store_true", help="Join pending and/or discovered folders")
     folders.add_argument("--missing", action="store_true", help="Only show orphaned syncweb folders")
-    folders.add_argument("--local-only", "--local", action="store_true", help="Only include local devices when joining folders and counting peers")
+    folders.add_argument(
+        "--local-only",
+        "--local",
+        action="store_true",
+        help="Only include local devices when joining folders and counting peers",
+    )
     folders.add_argument(
         "--include",
         "--search",
@@ -488,7 +514,7 @@ for example `--sort=date,-seeds` means old and popular
     if args.home is None:
         args.home = cmd_utils.default_state_dir("syncweb")
 
-    args.st = Syncweb(name="syncweb", base_dir=args.home)
+    args.st = Syncweb(name=get_hostname(), base_dir=args.home)
     args.st.start(daemonize=True)
     args.st.wait_for_pong()
     log.info("%s", args.st.version["longVersion"])
