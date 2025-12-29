@@ -57,19 +57,26 @@ def cmd_join(args):
 
 
 def get_hostname():
+    ignored = ("localhost", "localhost.localdomain")
+
+    with suppress(Exception):
+        name = socket.getfqdn()
+        if name and name not in ignored:
+            return name
+
     with suppress(Exception):
         name = socket.gethostname()
-        if name and name != "localhost":
+        if name and name not in ignored:
             return name
 
     with suppress(Exception):
         name = platform.node()
-        if name and name != "localhost":
+        if name and name not in ignored:
             return name
 
     with suppress(Exception):
         name = subprocess.check_output(["hostname"], text=True).strip()
-        if name and name != "localhost":
+        if name and name not in ignored:
             return name
 
     return "syncweb"
