@@ -1,5 +1,3 @@
-devices: --introducer option
-
 sort by Wikipedia Importance
 
 --print template in find? bridge the gap between find and stat --terse

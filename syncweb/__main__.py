@@ -35,7 +35,7 @@ def cmd_shutdown(args):
 
 
 def cmd_accept(args):
-    added = args.st.cmd_accept(args.device_ids, args.folder_ids)
+    added = args.st.cmd_accept(args.device_ids, args.folder_ids, args.introducer)
     log.info("Added %s %s", added, "device" if added == 1 else "devices")
 
 
@@ -128,6 +128,7 @@ def cli():
     join.add_argument("--prefix", default=os.getenv("SYNCWEB_HOME") or ".", help="Path to parent folder")
 
     accept = subparsers.add_parser("accept", aliases=["add"], help="Add a device to syncweb", func=cmd_accept)
+    accept.add_argument("--introducer", action="store_true", help="Configure devices as introducers")
     accept.add_argument(
         "--folder-ids",
         "--folders",
@@ -259,6 +260,7 @@ def cli():
         action=ArgparseList,
         help="Exclude devices which match by device name or device ID",
     )
+    devices.add_argument("--introducer", action="store_true", help="Configure devices as introducers")
     devices.add_argument("--pause", action="store_true", help="Pause matching devices")
     devices.add_argument("--resume", action="store_true", help="Resume (unpause) matching devices")
     devices.add_argument("--print", action="store_true", help="Print only device ids")

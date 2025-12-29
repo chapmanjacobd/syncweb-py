@@ -176,7 +176,7 @@ def cmd_list_devices(args):
             print(f"  |  Total ↑{total_up:.1f} KB/s  ↓{total_down:.1f} KB/s (Δt={dt:.1f}s)")
 
     if args.accept:
-        args.st.accept_devices(device_ids)
+        args.st.accept_devices(device_ids, introducer=args.introducer)
 
     if args.pause:
         for device_id in device_ids:

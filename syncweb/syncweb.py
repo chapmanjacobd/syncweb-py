@@ -6,12 +6,12 @@ from syncweb.syncthing import SyncthingNode
 
 
 class Syncweb(SyncthingNode):
-    def cmd_accept(self, device_ids, folder_ids):
+    def cmd_accept(self, device_ids, folder_ids, introducer=False):
         device_count = 0
         for path in device_ids:
             try:
                 device_id = str_utils.extract_device_id(path)
-                self.add_device(deviceID=device_id)
+                self.add_device(deviceID=device_id, introducer=introducer)
                 device_count += 1
             except ValueError:
                 log.error("Invalid Device ID %s", path)
@@ -162,20 +162,15 @@ class Syncweb(SyncthingNode):
         except KeyError:
             return f"{short}-???????"
 
-    def accept_devices(self, device_ids):
-        existing_device_ids = {d["deviceID"] for d in self.devices()}
+    def accept_devices(self, device_ids, introducer=False):
         for device_id in device_ids:
-            if device_id in existing_device_ids:
-                log.info(f"[%s] Device %s already accepted!", self.name, device_id)
-                continue
-
-            name = device_id[:7]
-            log.info(f"[%s] Accepting device %s (%s)", self.name, name, device_id)
+            # name = device_id[:7]
+            log.info(f"[%s] Accepting device %s", self.name, device_id)
             cfg = {
                 "deviceID": device_id,
                 # "name": name,
                 "addresses": ["dynamic"],
                 "compression": "metadata",
-                "introducer": False,
+                "introducer": introducer,
             }
             self._put(f"config/devices/{device_id}", json=cfg)
